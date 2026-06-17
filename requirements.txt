@@ -1,0 +1,36 @@
+# Core training + evaluation stack for the biomedical LLM adaptation pipeline.
+# Pinned for reproducibility. Validated structurally on macOS (CPU, no CUDA);
+# the GPU path (bitsandbytes 4-bit) is exercised on a Colab T4.
+#
+# NOTE on torch: Google Colab ships its own CUDA-matched torch build. Do NOT
+# reinstall torch on Colab — the notebook skips it. The pin below is for local
+# CPU structural validation and Docker.
+torch==2.5.1
+
+# Hugging Face model + PEFT stack
+transformers==4.46.3
+peft==0.13.2
+trl==0.12.1
+accelerate==1.1.1
+datasets==3.1.0
+huggingface-hub==0.26.2
+sentencepiece==0.2.0
+protobuf==5.28.3
+einops==0.8.0
+
+# 4-bit QLoRA quantization (CUDA-only; import-guarded for CPU/Mac).
+# On macOS this wheel installs but is never imported during structural checks.
+bitsandbytes==0.44.1 ; platform_system == "Linux"
+
+# Evaluation: EleutherAI lm-evaluation-harness (NOT a hand-rolled loop)
+lm-eval==0.4.5
+
+# Experiment tracking (degrades gracefully if no WANDB_API_KEY)
+wandb==0.18.7
+
+# Config + utilities
+PyYAML==6.0.2
+python-dotenv==1.0.1
+pandas==2.2.3
+numpy==1.26.4
+tqdm==4.67.1

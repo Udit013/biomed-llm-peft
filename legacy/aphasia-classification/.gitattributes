@@ -1,0 +1,2 @@
+deberta_saved/*.safetensors filter=lfs diff=lfs merge=lfs -text
+deberta_saved/model.safetensors filter=lfs diff=lfs merge=lfs -text

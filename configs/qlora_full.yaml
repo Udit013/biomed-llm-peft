@@ -1,0 +1,10 @@
+# Optional upper anchor: full MedMCQA train (~182K after filtering).
+# REQUIRES Colab Pro / A100 / multi-session resume — NOT a free-T4 single-session
+# run. Included so the sweep has a saturation anchor; treat as optional.
+inherits: base.yaml
+
+run_name: qlora-medmcqa-full
+data:
+  train_size: -1            # -1 => use the entire (filtered) train split
+output:
+  output_dir: outputs/qlora_full

@@ -1,0 +1,16 @@
+# Out-of-domain generalization task: PubMedQA (expert-labeled subset, 1000 Qs).
+# USED ONLY FOR EVALUATION — never for training. yes/no/maybe classification.
+task: pubmedqa_ood
+dataset_path: qiaojin/PubMedQA
+dataset_name: pqa_labeled
+test_split: train            # pqa_labeled ships its 1000 labeled items as `train`
+output_type: multiple_choice
+doc_to_text: !function utils.pubmedqa_doc_to_text
+doc_to_choice: !function utils.pubmedqa_doc_to_choice
+doc_to_target: !function utils.pubmedqa_doc_to_target
+metric_list:
+  - metric: acc
+    aggregation: mean
+    higher_is_better: true
+metadata:
+  version: 1.0

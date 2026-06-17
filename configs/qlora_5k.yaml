@@ -1,0 +1,10 @@
+# Pipeline-validation run. Fits comfortably in one free Colab T4 session.
+# Run this end-to-end FIRST and confirm it produces real eval numbers before
+# launching any larger N.
+inherits: base.yaml
+
+run_name: qlora-medmcqa-5k
+data:
+  train_size: 5000
+output:
+  output_dir: outputs/qlora_5k

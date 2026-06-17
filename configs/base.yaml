@@ -1,0 +1,57 @@
+# Base configuration. Per-N sweep configs (qlora_5k.yaml, etc.) inherit from
+# this via `inherits: base.yaml` and override only what changes (mainly
+# data.train_size, run_name, output.output_dir).
+#
+# Defaults are sized for a single free Google Colab T4 (16 GB, Turing / compute
+# 7.5). T4 has NO native bf16 -> we use fp16 + float16 compute dtype. On an
+# Ampere+ GPU (A100/L4/4090) switch compute_dtype->bfloat16 and bf16->true.
+
+seed: 42
+
+model:
+  base_model: Qwen/Qwen2.5-7B-Instruct
+  max_seq_length: 1024          # MedMCQA items are short; 1024 is generous
+
+data:
+  dataset: medmcqa               # HF: openlifescienceai/medmcqa
+  train_size: 5000               # N — the data-scaling sweep parameter
+  val_size: 1000                 # held-out slice of official train for eval-loss
+  # MedMCQA's official `test` split has hidden labels, so all *scoring* uses the
+  # official `validation` split (4183 labeled items). Stated explicitly so the
+  # split provenance is unambiguous and leakage-free.
+  eval_split: validation
+
+quant:
+  load_in_4bit: true
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_compute_dtype: float16   # T4-safe; use bfloat16 on Ampere+
+  bnb_4bit_use_double_quant: true
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+train:
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 16   # effective batch size 16
+  learning_rate: 2.0e-4
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  weight_decay: 0.0
+  max_grad_norm: 0.3
+  gradient_checkpointing: true
+  fp16: true                        # T4
+  bf16: false
+  optim: paged_adamw_8bit
+  logging_steps: 10
+  save_steps: 200                   # checkpoint often so a disconnect loses little
+  save_total_limit: 2
+  report_to: wandb                  # auto-downgraded to "none" if no W&B key
+
+output:
+  output_dir: outputs/qlora_5k
+  push_to_hub: false
+  hub_repo_id: null                 # set or use HF_HUB_REPO_ID env var

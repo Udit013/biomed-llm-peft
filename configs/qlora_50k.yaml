@@ -1,0 +1,11 @@
+# Third sweep point. NOTE: 50K at 1 epoch is unlikely to finish inside a single
+# free T4 session (~12h cap, frequent disconnects). Requires Colab Pro, a
+# longer/cloud GPU, OR resuming across multiple checkpointed T4 sessions
+# (training is resumable from outputs/qlora_50k/checkpoint-*). See docs/EXPERIMENT_PLAN.md.
+inherits: base.yaml
+
+run_name: qlora-medmcqa-50k
+data:
+  train_size: 50000
+output:
+  output_dir: outputs/qlora_50k

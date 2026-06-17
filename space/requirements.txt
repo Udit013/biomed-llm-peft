@@ -1,0 +1,7 @@
+# Dependencies for the Hugging Face Space (kept minimal; no training stack).
+gradio==5.7.1
+transformers==4.46.3
+peft==0.13.2
+torch==2.5.1
+accelerate==1.1.1
+sentencepiece==0.2.0

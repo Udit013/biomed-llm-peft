@@ -1,0 +1,17 @@
+# In-domain scoring task: MedMCQA official `validation` split (4183 labeled).
+# multiple_choice output type => the harness scores log-likelihood of each
+# option text and picks the argmax. Run with --log_samples so each scored item
+# (including subject_name) is dumped for the per-subject error analysis.
+task: medmcqa_val
+dataset_path: openlifescienceai/medmcqa
+test_split: validation
+output_type: multiple_choice
+doc_to_text: !function utils.medmcqa_doc_to_text
+doc_to_choice: !function utils.medmcqa_doc_to_choice
+doc_to_target: cop
+metric_list:
+  - metric: acc
+    aggregation: mean
+    higher_is_better: true
+metadata:
+  version: 1.0

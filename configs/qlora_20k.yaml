@@ -1,0 +1,8 @@
+# Second sweep point. Still fits a single free Colab T4 session (~a few hours).
+inherits: base.yaml
+
+run_name: qlora-medmcqa-20k
+data:
+  train_size: 20000
+output:
+  output_dir: outputs/qlora_20k
