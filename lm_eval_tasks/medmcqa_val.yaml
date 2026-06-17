@@ -5,6 +5,9 @@
 task: medmcqa_val
 dataset_path: openlifescienceai/medmcqa
 test_split: validation
+# Few-shot exemplars (when --num_fewshot>0) are drawn from the TRAIN split, NOT
+# the scored validation set, to avoid contaminating the 5-shot baseline.
+fewshot_split: train
 output_type: multiple_choice
 doc_to_text: !function utils.medmcqa_doc_to_text
 doc_to_choice: !function utils.medmcqa_doc_to_choice

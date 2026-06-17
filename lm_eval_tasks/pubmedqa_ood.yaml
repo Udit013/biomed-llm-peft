@@ -1,5 +1,8 @@
 # Out-of-domain generalization task: PubMedQA (expert-labeled subset, 1000 Qs).
 # USED ONLY FOR EVALUATION — never for training. yes/no/maybe classification.
+# NOTE: pqa_labeled ships only this 1000-item split, so there is no separate
+# pool for few-shot exemplars; the OOD headline focus is 0-shot. If you report
+# 5-shot PubMedQA, note that exemplars come from the same labeled set.
 task: pubmedqa_ood
 dataset_path: qiaojin/PubMedQA
 dataset_name: pqa_labeled
