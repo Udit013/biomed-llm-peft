@@ -100,7 +100,22 @@ def main() -> None:
         assert "PENDING RUN" in render_cost_table("results/does_not_exist.json")
     ok &= check("tables", _tables)
 
-    print("[7] tracking degrades without W&B key")
+    print("[7] checkpoint-resume detection")
+    import tempfile
+    from pathlib import Path
+    from src.train.sft import _latest_checkpoint
+
+    def _ckpt():
+        assert _latest_checkpoint(Path("/tmp/_nope_xyz")) is False
+        with tempfile.TemporaryDirectory() as d:
+            dd = Path(d)
+            assert _latest_checkpoint(dd) is False        # empty dir must not crash
+            (dd / "checkpoint-50").mkdir()
+            (dd / "checkpoint-200").mkdir()
+            assert _latest_checkpoint(dd).endswith("checkpoint-200")
+    ok &= check("_latest_checkpoint", _ckpt)
+
+    print("[8] tracking degrades without W&B key")
     import os
     from src.utils.tracking import wandb_enabled
 

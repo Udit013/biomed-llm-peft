@@ -24,7 +24,6 @@ def _latest_checkpoint(output_dir: Path) -> str | bool:
     ckpts = sorted(
         output_dir.glob("checkpoint-*"),
         key=lambda p: int(p.name.split("-")[-1]),
-        default=None,
     )
     return str(ckpts[-1]) if ckpts else False
 
