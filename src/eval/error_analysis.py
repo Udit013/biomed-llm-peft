@@ -91,13 +91,19 @@ def render_markdown(result: dict) -> str:
                 "`--log_samples`, then run `scripts/error_analysis.py`.\n")
 
     rows = result["rows"]
+
+    def _f(v, plus=False):
+        if v is None:
+            return "n/a"
+        return f"{v:+.1f}" if plus else f"{v:.1f}"
+
     out = ["### MedMCQA per-subject error analysis\n",
            "| Subject | N | Base acc | Fine-tuned acc | Δ (pp) | Verdict |",
            "|---|---:|---:|---:|---:|---|"]
     for r in rows:
         out.append(
-            f"| {r['subject']} | {r['n']} | {r['base_acc']:.1f} | "
-            f"{r['finetuned_acc']:.1f} | {r['delta']:+.1f} | {r['verdict']} |"
+            f"| {r['subject']} | {r['n']} | {_f(r['base_acc'])} | "
+            f"{_f(r['finetuned_acc'])} | {_f(r['delta'], plus=True)} | {r['verdict']} |"
         )
 
     improved = [r for r in rows if r["verdict"] == "improved"]
