@@ -1,0 +1,141 @@
+{
+  "status": "OK",
+  "rows": [
+    {
+      "subject": "Anaesthesia",
+      "n": 5,
+      "base_acc": 40.0,
+      "finetuned_acc": 40.0,
+      "delta": 0.0,
+      "verdict": "neutral"
+    },
+    {
+      "subject": "Anatomy",
+      "n": 11,
+      "base_acc": 54.54545454545455,
+      "finetuned_acc": 54.54545454545455,
+      "delta": 0.0,
+      "verdict": "neutral"
+    },
+    {
+      "subject": "Biochemistry",
+      "n": 12,
+      "base_acc": 66.66666666666667,
+      "finetuned_acc": 58.333333333333336,
+      "delta": -8.333333333333336,
+      "verdict": "worsened"
+    },
+    {
+      "subject": "Dental",
+      "n": 57,
+      "base_acc": 43.85964912280702,
+      "finetuned_acc": 47.36842105263158,
+      "delta": 3.5087719298245617,
+      "verdict": "improved"
+    },
+    {
+      "subject": "ENT",
+      "n": 5,
+      "base_acc": 20.0,
+      "finetuned_acc": 20.0,
+      "delta": 0.0,
+      "verdict": "neutral"
+    },
+    {
+      "subject": "Forensic Medicine",
+      "n": 3,
+      "base_acc": 0.0,
+      "finetuned_acc": 0.0,
+      "delta": 0.0,
+      "verdict": "neutral"
+    },
+    {
+      "subject": "Gynaecology & Obstetrics",
+      "n": 9,
+      "base_acc": 66.66666666666667,
+      "finetuned_acc": 55.55555555555556,
+      "delta": -11.111111111111114,
+      "verdict": "worsened"
+    },
+    {
+      "subject": "Medicine",
+      "n": 12,
+      "base_acc": 50.0,
+      "finetuned_acc": 58.333333333333336,
+      "delta": 8.333333333333336,
+      "verdict": "improved"
+    },
+    {
+      "subject": "Microbiology",
+      "n": 10,
+      "base_acc": 20.0,
+      "finetuned_acc": 30.0,
+      "delta": 10.0,
+      "verdict": "improved"
+    },
+    {
+      "subject": "Ophthalmology",
+      "n": 6,
+      "base_acc": 16.666666666666668,
+      "finetuned_acc": 16.666666666666668,
+      "delta": 0.0,
+      "verdict": "neutral"
+    },
+    {
+      "subject": "Pathology",
+      "n": 12,
+      "base_acc": 50.0,
+      "finetuned_acc": 50.0,
+      "delta": 0.0,
+      "verdict": "neutral"
+    },
+    {
+      "subject": "Pediatrics",
+      "n": 13,
+      "base_acc": 61.53846153846154,
+      "finetuned_acc": 61.53846153846154,
+      "delta": 0.0,
+      "verdict": "neutral"
+    },
+    {
+      "subject": "Pharmacology",
+      "n": 11,
+      "base_acc": 72.72727272727273,
+      "finetuned_acc": 72.72727272727273,
+      "delta": 0.0,
+      "verdict": "neutral"
+    },
+    {
+      "subject": "Physiology",
+      "n": 13,
+      "base_acc": 61.53846153846154,
+      "finetuned_acc": 69.23076923076923,
+      "delta": 7.692307692307686,
+      "verdict": "improved"
+    },
+    {
+      "subject": "Radiology",
+      "n": 1,
+      "base_acc": 0.0,
+      "finetuned_acc": 0.0,
+      "delta": 0.0,
+      "verdict": "neutral"
+    },
+    {
+      "subject": "Social & Preventive Medicine",
+      "n": 3,
+      "base_acc": 66.66666666666667,
+      "finetuned_acc": 66.66666666666667,
+      "delta": 0.0,
+      "verdict": "neutral"
+    },
+    {
+      "subject": "Surgery",
+      "n": 17,
+      "base_acc": 35.294117647058826,
+      "finetuned_acc": 47.05882352941177,
+      "delta": 11.764705882352942,
+      "verdict": "improved"
+    }
+  ]
+}
