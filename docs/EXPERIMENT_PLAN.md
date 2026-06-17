@@ -36,7 +36,11 @@ so any outcome (large gain, marginal gain, or no gain) is a real result.
 2. **5K slice end-to-end (Colab T4).** `bash reproduce.sh configs/qlora_5k.yaml`
    must produce real numbers: train → base 0/5-shot eval → finetuned eval →
    per-subject error analysis → headline table. **Do not scale up until this
-   yields real numbers.**
+   yields real numbers.** NOTE: full-validation loglikelihood scoring (~20k
+   requests) is too slow for a free-T4 session, so the T4 validation pass scores
+   a fixed SUBSAMPLE (`EVAL_LIMIT`, first N per task; lm-eval records N). Numbers
+   from a subsampled pass are labeled as such; full official-split scoring is a
+   separate longer/Pro/cloud run (`EVAL_LIMIT=None`).
 3. **Scale the sweep.** Repeat for 20K (fits a single free T4 session). 50K and
    full require Colab Pro / a longer or cloud GPU, OR resuming across multiple
    checkpointed T4 sessions (training resumes from `outputs/<run>/checkpoint-*`).
