@@ -19,8 +19,11 @@ protobuf==5.28.3
 einops==0.8.0
 
 # 4-bit QLoRA quantization (CUDA-only; import-guarded for CPU/Mac).
-# On macOS this wheel installs but is never imported during structural checks.
-bitsandbytes==0.44.1 ; platform_system == "Linux"
+# Must match the runtime's torch/CUDA + Triton. Old bnb (<=0.44.x) imports the
+# removed `triton.ops` and breaks on modern Triton, so we floor it. On Colab the
+# notebook installs the LATEST bnb to match Colab's torch; pin exactly here only
+# if you control the CUDA/torch versions (e.g. the Dockerfile).
+bitsandbytes>=0.45.0 ; platform_system == "Linux"
 
 # Evaluation: EleutherAI lm-evaluation-harness (NOT a hand-rolled loop)
 lm-eval==0.4.5
