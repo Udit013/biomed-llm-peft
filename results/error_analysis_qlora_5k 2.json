@@ -1,0 +1,5 @@
+{
+  "status": "PENDING RUN",
+  "base_dir": "results/base_0shot",
+  "finetuned_dir": "results/qlora_5k"
+}

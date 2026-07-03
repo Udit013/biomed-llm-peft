@@ -1,0 +1,7 @@
+| Model | MedMCQA | PubMedQA |
+|---|---|---|
+| Base 0-shot | PENDING RUN | PENDING RUN |
+| Base 5-shot | PENDING RUN | PENDING RUN |
+| QLoRA 5K | PENDING RUN | PENDING RUN |
+| QLoRA 20K | PENDING RUN | PENDING RUN |
+| QLoRA 50K | PENDING RUN | PENDING RUN |
