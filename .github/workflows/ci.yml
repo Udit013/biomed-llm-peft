@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install CPU-only test deps
+        # Lean set: enough to import the assistant package and run the CPU tests
+        # without pulling torch/CUDA. Full stacks live in requirements*.txt.
+        run: |
+          python -m pip install --upgrade pip
+          pip install pydantic pydantic-settings numpy pyyaml pytest
+
+      - name: Structural smoke test (research pipeline)
+        run: python scripts/smoke_test.py
+
+      - name: RAG core unit tests (assistant)
+        run: pytest tests/ -q

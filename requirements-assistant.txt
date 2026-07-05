@@ -1,0 +1,37 @@
+# Production Biomedical AI Research Assistant (RAG + agents + serving).
+# Separate from the training stack (requirements.txt) so the deployable app stays
+# lean. Install with:  pip install -r requirements-assistant.txt
+#
+# NOTE: torch + transformers + peft come from requirements.txt (shared with the
+# research pipeline) — install that too for the live FT+RAG serving path.
+
+# Config + schema
+pydantic==2.10.2
+pydantic-settings==2.6.1
+
+# Retrieval / embeddings / reranking
+sentence-transformers==3.3.1
+numpy==1.26.4
+
+# Vector store (Neon Postgres + pgvector)
+pgvector==0.3.6
+psycopg[binary]==3.2.3
+
+# Ingestion (NCBI E-utilities)
+httpx==0.28.1
+
+# Agent orchestration
+langgraph==0.2.53
+langchain-core==0.3.21
+
+# API
+fastapi==0.115.5
+uvicorn==0.32.1
+
+# Evaluation (generation metrics)
+rouge-score==0.1.2
+bert-score==0.3.13
+rank-bm25==0.2.2
+
+# Retries / robustness
+tenacity==9.0.0

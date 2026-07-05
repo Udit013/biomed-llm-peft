@@ -1,0 +1,20 @@
+# Curated biomedical corpus for the RAG index. Reproducible: `scripts/rag_index.py`
+# runs these PubMed queries (+ any local guideline files) and builds the index.
+# Sized to fit Neon free tier (~0.5 GB) — tune retmax to grow/shrink.
+
+retmax_per_query: 400        # abstracts per topic query
+
+pubmed_queries:
+  - "type 2 diabetes management guidelines[Title/Abstract]"
+  - "hypertension treatment adults[Title/Abstract]"
+  - "community acquired pneumonia treatment[Title/Abstract]"
+  - "asthma management guideline[Title/Abstract]"
+  - "major depressive disorder first-line treatment[Title/Abstract]"
+  - "acute ischemic stroke thrombolysis[Title/Abstract]"
+  - "chronic kidney disease management[Title/Abstract]"
+  - "sepsis early management[Title/Abstract]"
+  - "COPD exacerbation treatment[Title/Abstract]"
+  - "atrial fibrillation anticoagulation[Title/Abstract]"
+
+# Curated guideline text files are read from data/corpus/guidelines/{nih,who,cdc}/*.txt
+guideline_sources: [nih, who, cdc]
