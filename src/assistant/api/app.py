@@ -43,12 +43,17 @@ def _build_service():
     cfg = get_settings()
     pipeline = RAGPipeline(cfg)
     if cfg.inference_provider == "hf_inference":
-        provider = HFInferenceProvider(cfg.adapter_repo, token=cfg.hf_token,
+        # Serverless HF Inference can't serve a custom LoRA adapter, so it serves
+        # the BASE model -> this path is honestly "Base + RAG". True FT+RAG live
+        # needs a GPU backend (inference_provider=local, e.g. Colab tunnel).
+        provider = HFInferenceProvider(cfg.base_model, token=cfg.hf_token,
                                        max_new_tokens=cfg.max_new_tokens)
+        label = "base_rag"
     else:
         provider = LocalTransformersProvider(cfg.base_model, adapter_dir=cfg.adapter_repo,
                                              max_new_tokens=cfg.max_new_tokens)
-    return AssistantService(pipeline, provider, config_label="ft_rag", settings=cfg)
+        label = "ft_rag"
+    return AssistantService(pipeline, provider, config_label=label, settings=cfg)
 
 
 @asynccontextmanager

@@ -15,7 +15,7 @@ from ..logging import get_logger, timed
 from ..schema import Citation, Document, EmbeddedChunk, RetrievedPassage
 from .chunk import chunk_document
 from .citations import build_citations
-from .embed import Embedder
+from .embed import Embedder, get_embedder
 from .rerank import Reranker
 from .retrieve import Retriever
 from .store import VectorStore, get_store
@@ -29,7 +29,8 @@ class RAGPipeline:
                  embedder: Embedder | None = None,
                  reranker: Reranker | None = None):
         self.cfg = settings or get_settings()
-        self.embedder = embedder or Embedder(self.cfg.embedding_model)
+        self.embedder = embedder or get_embedder(
+            self.cfg.embedding_provider, self.cfg.embedding_model, self.cfg.hf_token)
         self.store = store or get_store(
             self.cfg.vector_backend, self.cfg.index_dir,
             self.cfg.embedding_dim, self.cfg.database_url)

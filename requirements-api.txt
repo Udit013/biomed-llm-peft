@@ -1,0 +1,22 @@
+# Lean FastAPI backend deps for FREE-TIER Render (torch-free, small image).
+# Query embeddings + LLM both go through HF Inference, so NO sentence-transformers
+# / torch / bert-score here. Index building (scripts/rag_index.py) uses the fuller
+# requirements-assistant.txt on a machine with the embedding model.
+pydantic==2.10.2
+pydantic-settings==2.6.1
+numpy==1.26.4
+
+# Vector store (Neon pgvector)
+pgvector==0.3.6
+psycopg[binary]==3.2.3
+
+# Agents + HF Inference (embeddings + LLM)
+langgraph==0.2.53
+langchain-core==0.3.21
+huggingface-hub==0.26.2
+httpx==0.28.1
+
+# API
+fastapi==0.115.5
+uvicorn==0.32.1
+PyYAML==6.0.2

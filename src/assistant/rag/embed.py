@@ -41,3 +41,48 @@ class Embedder:
         vec = model.encode([_QUERY_PREFIX + query], normalize_embeddings=True,
                            convert_to_numpy=True)
         return np.asarray(vec, dtype=np.float32)[0]
+
+
+def _l2(v: np.ndarray) -> np.ndarray:
+    n = np.linalg.norm(v)
+    return v / n if n else v
+
+
+class HFInferenceEmbedder:
+    """Embed via HF Inference feature-extraction — no torch/sentence-transformers.
+
+    Lets the FastAPI backend run on a tiny free-tier image (query-time embedding
+    only). Uses the SAME model as the local embedder, so vectors match the index
+    built by `scripts/rag_index.py`. Index building still uses the local Embedder
+    (batch throughput); serving uses this.
+    """
+
+    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5", token: str | None = None):
+        self.model_name = model_name
+        self.token = token
+        self._client = None
+
+    def _get_client(self):
+        if self._client is None:
+            from huggingface_hub import InferenceClient
+
+            self._client = InferenceClient(model=self.model_name, token=self.token)
+        return self._client
+
+    def _embed_one(self, text: str) -> np.ndarray:
+        out = np.asarray(self._get_client().feature_extraction(text), dtype=np.float32)
+        if out.ndim == 2:          # token-level -> mean-pool to a sentence vector
+            out = out.mean(axis=0)
+        return _l2(out)
+
+    def embed_documents(self, texts: list[str]) -> np.ndarray:
+        return np.vstack([self._embed_one(t) for t in texts])
+
+    def embed_query(self, query: str) -> np.ndarray:
+        return self._embed_one(_QUERY_PREFIX + query)
+
+
+def get_embedder(provider: str, model_name: str, token: str | None = None):
+    if provider == "hf_inference":
+        return HFInferenceEmbedder(model_name, token=token)
+    return Embedder(model_name)
