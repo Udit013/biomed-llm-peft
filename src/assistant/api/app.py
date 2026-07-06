@@ -103,11 +103,16 @@ def health() -> dict:
 
 @app.post("/query")
 def query(req: QueryRequest) -> dict:
-    if _STATE.get("service") is None:
-        log.info("cold start: building RAG service")
-        _STATE["service"] = _build_service()
-    ans = _STATE["service"].answer(req.question)
-    return ans.model_dump()
+    try:
+        if _STATE.get("service") is None:
+            log.info("cold start: building RAG service")
+            _STATE["service"] = _build_service()
+        ans = _STATE["service"].answer(req.question)
+        return ans.model_dump()
+    except Exception as exc:  # surface the real cause (embedding / LLM / DB) + log trace
+        _STATE["service"] = None      # don't cache a half-built service; allow retry
+        log.error("query failed", extra={"error": str(exc)}, exc_info=True)
+        raise HTTPException(502, f"{type(exc).__name__}: {exc}")
 
 
 @app.get("/benchmark")
