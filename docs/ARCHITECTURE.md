@@ -12,7 +12,7 @@ Two clearly-separated layers in one repo:
 
 ```
                          ┌──────────────────────── HF Space (Gradio) ────────────────────────┐
-                         │  Ask (live FT+RAG)          Benchmark Explorer (precomputed 4-way) │
+                         │  Ask (live Base+RAG*)       Benchmark Explorer (precomputed 4-way) │
                          └───────────────┬───────────────────────────┬───────────────────────┘
                                          │ POST /query               │ benchmark_explorer.json
                                          ▼                           ▼
@@ -58,3 +58,9 @@ README tables and the interactive Benchmark Explorer.
 - **Free-tier serving** — the 7B never runs on free CPU; live answers use HF
   Inference, and the 4-way comparison is precomputed (Explorer), keeping the demo
   responsive and honest.
+- **Honest, swappable live config** (`*`) — HF Inference serverless can't serve a
+  custom LoRA adapter, so the free live path is **Base + RAG**. The API returns
+  the config it *actually* served (`served_config` on `/health`, `config` on
+  `/query`) and the UI displays that verbatim — so pointing
+  `BIOMED_INFERENCE_PROVIDER` at a GPU backend with the adapter upgrades the live
+  demo to **Fine-tuned + RAG** with zero UI or API changes.

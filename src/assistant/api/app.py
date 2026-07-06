@@ -1,9 +1,11 @@
-"""FastAPI backend: live FT+RAG answering + precomputed benchmark data.
+"""FastAPI backend: live RAG answering + precomputed benchmark data.
 
 Endpoints:
-  GET  /health          — liveness + config summary
-  POST /query           — live Fine-tuned + RAG answer for an arbitrary question
-                          (Planner → Retrieval → Answer → Citation-Verification)
+  GET  /health          — liveness + which config is actually served
+  POST /query           — live RAG answer for an arbitrary question (Planner →
+                          Retrieval → Answer → Citation-Verification). The
+                          response's `config` says what served it (base_rag on
+                          free tier; ft_rag on a GPU backend with the adapter).
   GET  /benchmark       — precomputed 4-way Benchmark Explorer data (if present)
 
 The 7B FT model is loaded lazily on the FIRST /query (documented cold start).
@@ -28,6 +30,18 @@ log = get_logger(__name__)
 _STATE: dict = {}
 _EXPLORER_PATH = Path("results/benchmark_explorer.json")
 
+CONFIG_DISPLAY = {"base_rag": "Base + RAG", "ft_rag": "Fine-tuned + RAG"}
+
+
+def served_config(cfg) -> str:
+    """The config the live backend ACTUALLY serves — a pure function of env.
+
+    hf_inference (free tier) can only serve the base model -> 'base_rag'. Point
+    BIOMED_INFERENCE_PROVIDER at a local/GPU backend with the adapter and it
+    becomes 'ft_rag' — with no API or UI change, since both read this label.
+    """
+    return "base_rag" if cfg.inference_provider == "hf_inference" else "ft_rag"
+
 
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=3,
@@ -35,7 +49,7 @@ class QueryRequest(BaseModel):
 
 
 def _build_service():
-    """Construct the live FT+RAG AssistantService (provider per config)."""
+    """Construct the live RAG AssistantService (provider per config)."""
     from ..agents.graph import AssistantService
     from ..rag.pipeline import RAGPipeline
     from ..serving.providers import HFInferenceProvider, LocalTransformersProvider
@@ -44,16 +58,14 @@ def _build_service():
     pipeline = RAGPipeline(cfg)
     if cfg.inference_provider == "hf_inference":
         # Serverless HF Inference can't serve a custom LoRA adapter, so it serves
-        # the BASE model -> this path is honestly "Base + RAG". True FT+RAG live
-        # needs a GPU backend (inference_provider=local, e.g. Colab tunnel).
+        # the BASE model -> honestly "Base + RAG".
         provider = HFInferenceProvider(cfg.base_model, token=cfg.hf_token,
                                        max_new_tokens=cfg.max_new_tokens)
-        label = "base_rag"
     else:
+        # GPU/local backend with the adapter -> true "Fine-tuned + RAG".
         provider = LocalTransformersProvider(cfg.base_model, adapter_dir=cfg.adapter_repo,
                                              max_new_tokens=cfg.max_new_tokens)
-        label = "ft_rag"
-    return AssistantService(pipeline, provider, config_label=label, settings=cfg)
+    return AssistantService(pipeline, provider, config_label=served_config(cfg), settings=cfg)
 
 
 @asynccontextmanager
@@ -70,14 +82,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Biomedical AI Research Assistant",
-              description="Live Fine-tuned + RAG QA with citations. NOT for clinical use.",
+              description="Live RAG QA with citations (Base + RAG on free tier; the "
+                          "response's `config` field states what was actually served). "
+                          "NOT for clinical use.",
               lifespan=lifespan)
 
 
 @app.get("/health")
 def health() -> dict:
     cfg = _STATE.get("cfg")
-    return {"status": "ok", "vector_backend": getattr(cfg, "vector_backend", None),
+    label = served_config(cfg) if cfg else None
+    return {"status": "ok",
+            "served_config": label,                              # base_rag | ft_rag
+            "served_config_display": CONFIG_DISPLAY.get(label),  # "Base + RAG" | ...
+            "vector_backend": getattr(cfg, "vector_backend", None),
             "inference_provider": getattr(cfg, "inference_provider", None),
             "model_loaded": _STATE.get("service") is not None,
             "benchmark_available": "benchmark" in _STATE}
@@ -86,7 +104,7 @@ def health() -> dict:
 @app.post("/query")
 def query(req: QueryRequest) -> dict:
     if _STATE.get("service") is None:
-        log.info("cold start: building FT+RAG service")
+        log.info("cold start: building RAG service")
         _STATE["service"] = _build_service()
     ans = _STATE["service"].answer(req.question)
     return ans.model_dump()

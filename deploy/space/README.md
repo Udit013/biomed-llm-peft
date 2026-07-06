@@ -15,9 +15,11 @@ license: apache-2.0
 Grounded, cited biomedical question answering over PubMed abstracts + NIH/WHO/CDC
 guidelines, built on `Qwen2.5-7B-Instruct` + a MedMCQA QLoRA adapter.
 
-- **Ask** — live **Fine-tuned + RAG** answers (Planner → Retrieval → Answer →
-  Citation-Verification) via the FastAPI backend. Set the `BACKEND_URL` Space
-  variable to your Render backend URL.
+- **Ask** — live **RAG** answers (Planner → Retrieval → Answer →
+  Citation-Verification) via the FastAPI backend. The tab shows which model
+  actually serves the demo: free tier = **Base + RAG**; a GPU endpoint with the
+  adapter = **Fine-tuned + RAG**. Set the `BACKEND_URL` Space variable to your
+  Render backend URL.
 - **Benchmark Explorer** — precomputed **4-way** comparison (Base / Fine-tuned /
   Base+RAG / Fine-tuned+RAG) from bundled `benchmark_explorer.json`; runs with no
   GPU or backend.

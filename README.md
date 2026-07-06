@@ -18,9 +18,12 @@ This repo has **two clearly-separated layers**:
 
 ## What it does
 
-- **Ask** an arbitrary biomedical question → a **live Fine-tuned + RAG** answer with
-  inline `[n]` citations, the retrieved passages, **per-claim verification** (each
-  factual claim flagged supported / unsupported), and end-to-end latency.
+- **Ask** an arbitrary biomedical question → a **live RAG** answer with inline `[n]`
+  citations, retrieved passages, **per-claim verification** (each claim flagged
+  supported / unsupported), and latency. On free-tier infra the live path is
+  **Base + RAG** (HF Inference can't serve a custom adapter) and the UI says so
+  honestly; pointing the backend at a GPU endpoint with the adapter makes it
+  **Fine-tuned + RAG** with no UI/API change.
 - **Benchmark Explorer** → inspect a **precomputed 4-way comparison** on curated
   questions (metrics, evidence, citations, latency) — no GPU needed.
 - **Reproducible pipeline** → ingest → chunk → embed → pgvector → retrieve →
@@ -33,7 +36,8 @@ This repo has **two clearly-separated layers**:
 HF Space (Gradio)  --/query-->  FastAPI (Render)  --SQL-->  Neon (pgvector)
  Ask + Explorer         Planner→Retrieval→Answer→CitationVerify (LangGraph)
                                      |
-                          HF Inference (Qwen2.5-7B + QLoRA adapter)
+              free tier: HF Inference (BASE Qwen2.5-7B)  → "Base + RAG"
+              swap-in:   GPU endpoint (base + adapter)   → "Fine-tuned + RAG"
 ```
 Full diagram + data flow: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The design
 is free-tier-honest: the 7B never runs on free CPU (served via HF Inference), and
@@ -71,7 +75,9 @@ Deploy to free tier (Neon + Render + HF Spaces): [deploy/DEPLOY.md](deploy/DEPLO
 
 - `GET /health` — liveness + config (vector backend, provider, model-loaded).
 - `POST /query` `{"question": "..."}` → `GroundedAnswer` (answer, citations,
-  passages, per-claim verification, latency, tokens). Live Fine-tuned + RAG.
+  passages, per-claim verification, latency, tokens). Returns `config` =
+  `base_rag` or `ft_rag` — whatever the backend actually serves — so the UI
+  labels it honestly and a GPU-endpoint swap needs no API/UI change.
 - `GET /benchmark` — precomputed 4-way Benchmark Explorer data.
 
 ## Engineering

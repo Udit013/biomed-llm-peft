@@ -1,7 +1,7 @@
 """Gradio Space: Biomedical AI Research Assistant.
 
 Two tabs, matching the hybrid design:
-  * Ask — arbitrary questions answered LIVE by the Fine-tuned + RAG pipeline via
+  * Ask — arbitrary questions answered LIVE by the deployed RAG pipeline via
     the FastAPI backend (BACKEND_URL). Shows answer, inline citations, retrieved
     evidence, per-claim verification, and latency.
   * Benchmark Explorer — precomputed 4-way comparison (Base / FT / Base+RAG /
@@ -43,7 +43,9 @@ def ask(question: str):
     badge = {True: "✅ all claims supported", False: "⚠️ some claims unsupported",
              None: "—"}[supported]
     lat = d.get("latency_ms", {})
-    answer = (f"{d.get('answer','')}\n\n---\n**Verification:** {badge}  |  "
+    served = CONFIG_LABEL.get(d.get("config"), d.get("config", "?"))  # honest label
+    answer = (f"{d.get('answer','')}\n\n---\n**Serving:** {served}  |  "
+              f"**Verification:** {badge}  |  "
               f"**Latency:** { round(sum(lat.values()),1) } ms  |  "
               f"**Tokens:** {d.get('token_usage',{}).get('total_tokens','?')}")
 
@@ -88,11 +90,30 @@ def _question_choices():
     return []
 
 
+def backend_status() -> str:
+    """Honest live-config badge — reads what the backend ACTUALLY serves."""
+    if not BACKEND_URL:
+        return "⚠️ No `BACKEND_URL` set — live answering disabled."
+    try:
+        h = httpx.get(f"{BACKEND_URL}/health", timeout=15).json()
+        disp = h.get("served_config_display") or "unknown"
+        return (f"**Live backend serving: `{disp}`** · vector store: "
+                f"`{h.get('vector_backend')}` · provider: `{h.get('inference_provider')}`")
+    except Exception as exc:  # noqa: BLE001
+        return f"⚠️ Backend unreachable: {exc}"
+
+
 with gr.Blocks(title="Biomedical AI Research Assistant") as demo:
     gr.Markdown("# 🩺 Biomedical AI Research Assistant\n"
                 "Grounded, cited answers over PubMed + NIH/WHO/CDC guidelines. "
                 "**Research/education only — not medical advice.**")
-    with gr.Tab("Ask (live Fine-tuned + RAG)"):
+    with gr.Tab("Ask (live)"):
+        status = gr.Markdown()
+        gr.Markdown("Answered live by the deployed RAG pipeline. The badge above "
+                    "shows which model actually serves this demo — **free tier = "
+                    "Base + RAG**; point the backend at a GPU endpoint with the "
+                    "adapter for **Fine-tuned + RAG** (no UI change needed). The "
+                    "fine-tuned comparison lives in the Benchmark Explorer tab.")
         q = gr.Textbox(label="Biomedical question", lines=2)
         btn = gr.Button("Ask", variant="primary")
         ans = gr.Markdown(label="Answer")
@@ -106,6 +127,8 @@ with gr.Blocks(title="Biomedical AI Research Assistant") as demo:
         qid = gr.Dropdown(choices=_question_choices(), label="Curated question")
         table = gr.Markdown()
         qid.change(explore, inputs=qid, outputs=table)
+
+    demo.load(backend_status, outputs=status)   # honest live-config badge on load
 
 if __name__ == "__main__":
     demo.launch()

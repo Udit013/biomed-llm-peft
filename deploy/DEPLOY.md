@@ -6,9 +6,10 @@ needed at serving time. Everything below fits free tiers.
 
 ```
 HF Space (Gradio)  --/query-->  Render (FastAPI)  --SQL-->  Neon (pgvector)
-   Ask + Explorer                 FT+RAG agents         biomedical chunks
+   Ask + Explorer               RAG + agents            biomedical chunks
                                        |
-                                   HF Inference (Qwen2.5-7B + adapter)
+        free tier: HF Inference (BASE) → "Base + RAG"   (swap to a GPU
+        endpoint with the adapter for live "Fine-tuned + RAG", no UI change)
 ```
 
 ## 1. Vector DB — Neon + pgvector
@@ -49,6 +50,25 @@ cp results/benchmark_explorer.json space_deploy/
 cd space_deploy && git add . && git commit -m "Deploy assistant" && git push
 ```
 In the Space **Settings → Variables**: set `BACKEND_URL` to your Render URL.
+
+## Swapping in a GPU-backed Fine-tuned + RAG endpoint (later, no UI/API change)
+
+The live config is driven entirely by env — the API returns the config it
+*actually* served (`/health.served_config`, `/query.config`) and the UI displays
+that verbatim. To upgrade the live demo from **Base + RAG** to **Fine-tuned + RAG**:
+
+1. Run the backend where a GPU is available (e.g. a Colab session) with:
+   ```bash
+   export BIOMED_INFERENCE_PROVIDER=local          # serve base + LoRA adapter
+   export BIOMED_EMBEDDING_PROVIDER=local          # local embeddings
+   export BIOMED_VECTOR_BACKEND=pgvector BIOMED_DATABASE_URL=...neon...
+   uvicorn src.assistant.api.app:app --host 0.0.0.0 --port 8000
+   ```
+2. Expose it (e.g. `cloudflared tunnel --url http://localhost:8000`) and set the
+   Space's `BACKEND_URL` to that URL.
+
+The Space's badge then automatically reads `Fine-tuned + RAG` — no code, UI, or API
+changes. Point `BACKEND_URL` back to Render to return to the always-on Base + RAG.
 
 ## Cold-start note
 The Render free instance sleeps when idle; the first request wakes it (~30–60 s),
