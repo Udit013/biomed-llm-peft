@@ -84,6 +84,7 @@ class AssistantService:
             citations=final.get("citations", []),
             passages=final.get("passages", []),
             config=self.config_label,
+            claims=final.get("claims", []),
             all_claims_supported=final.get("all_supported"),
             latency_ms=final.get("latency_ms", {}),
             token_usage=final.get("token_usage", {}),

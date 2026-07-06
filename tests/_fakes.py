@@ -39,7 +39,7 @@ class FakeProvider:
             body = user.split("[1]", 1)[1]
             body = re.split(r"\n\[2\]|\nQuestion:", body)[0]
             first_sentence = re.split(r"(?<=[.!?])\s+", body.strip())[-1].strip() or body.strip()
-            text = f"{first_sentence} [1]"
+            text = first_sentence.rstrip(".") + " [1]."      # marker inside the sentence
         else:
             text = "This is a general response without cited evidence."
         return GenerationResult(text=text, prompt_tokens=len(user.split()),

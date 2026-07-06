@@ -67,6 +67,7 @@ class GroundedAnswer(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
     passages: list[RetrievedPassage] = Field(default_factory=list)
     config: str = "ft_rag"           # base | ft | base_rag | ft_rag
+    claims: list[dict[str, Any]] = Field(default_factory=list)  # per-sentence grounding
     all_claims_supported: bool | None = None
     latency_ms: dict[str, float] = Field(default_factory=dict)  # per-stage timings
     token_usage: dict[str, int] = Field(default_factory=dict)
