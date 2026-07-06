@@ -53,6 +53,8 @@ def verify_claims(answer: str, passages: list[RetrievedPassage],
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", answer.strip()) if s.strip()]
     claims, all_ok = [], True
     for sent in sentences:
+        if not _tokens(sent):        # marker-only / punctuation fragment, not a claim
+            continue
         score, idx = _sentence_support(sent, passages)
         supported = score >= threshold
         all_ok = all_ok and supported
@@ -62,4 +64,4 @@ def verify_claims(answer: str, passages: list[RetrievedPassage],
             "support_score": round(score, 3),
             "passage_index": idx,
         })
-    return claims, (all_ok if sentences else False)
+    return claims, (all_ok if claims else False)
