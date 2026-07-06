@@ -1,0 +1,17 @@
+# FastAPI backend image (CPU; model served via HF Inference on free tier).
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+WORKDIR /app
+
+# Deps: the assistant stack, minus the heavy local-GPU torch path (HF Inference
+# serves the model). Install torch too only if you serve the model locally.
+COPY requirements-assistant.txt .
+RUN pip install --upgrade pip && pip install -r requirements-assistant.txt
+
+COPY src/ ./src/
+COPY configs/ ./configs/
+COPY results/benchmark_explorer.json ./results/benchmark_explorer.json
+
+EXPOSE 8000
+CMD ["uvicorn", "src.assistant.api.app:app", "--host", "0.0.0.0", "--port", "8000"]

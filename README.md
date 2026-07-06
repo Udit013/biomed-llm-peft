@@ -1,29 +1,96 @@
-# Biomedical LLM Adaptation: When Is PEFT Worth It?
+# Biomedical AI Research Assistant
 
-A reproducible engineering pipeline for studying **when** 4-bit QLoRA fine-tuning
-actually helps an already-strong instruction-tuned LLM on a biomedical benchmark,
-**how much data** is needed before it stops paying off, and **at what inference
-cost**.
+A production-quality LLM system for **grounded, cited biomedical question
+answering**: retrieval-augmented generation over PubMed + NIH/WHO/CDC guidelines,
+a LangGraph multi-agent workflow with **citation verification**, and a rigorous
+**4-way evaluation** (Base / Fine-tuned / Base+RAG / Fine-tuned+RAG) — built on a
+`Qwen2.5-7B-Instruct` QLoRA adapter fine-tuned on MedMCQA.
 
-> **This is a systematic engineering investigation, not an accuracy chase.** The
-> success criterion is *"did we learn when PEFT is worth it?"* — **not** *"did we
-> beat the benchmark?"*. A thin or even negative gap is a legitimate finding:
-> strong instruction tuning may already saturate the benchmark. The study is
-> designed so any outcome — large gain, marginal gain, or none — is a real result.
+> ⚠️ **Not for clinical use.** Research and education only.
 
-> ⚠️ **Not for clinical use.** Research and education only. Nothing here, including
-> any model or "option probability", may inform real medical decisions.
+**Live demo:** _[HF Space URL after deploy]_ · **Model:** [Udit013/qwen2.5-7b-medmcqa-qlora-5k](https://huggingface.co/Udit013/qwen2.5-7b-medmcqa-qlora-5k) · **Deploy:** [deploy/DEPLOY.md](deploy/DEPLOY.md) · **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-> **Status.** The pipeline is complete and validated end-to-end on a free Colab T4,
-> with a real, analyzed **N = 5K** result (below). The multi-point scaling sweep
-> (20K/50K) is **scoped as future work** — it is compute-bound, not blocked by the
-> code: each larger run is a one-line config change but exceeds a free-tier GPU
-> budget (see [§2](#2-the-headline-result-data-scaling-at-n5k)). The engineering and
-> evaluation methodology — not the number of sweep points — is the deliverable.
+This repo has **two clearly-separated layers**:
+- **Part A — Production assistant** (`src/assistant/`): RAG + agents + serving + eval + deploy (this section).
+- **Part B — QLoRA research foundation** (`src/{data,train,eval,serve}`): the original fine-tuning study, **preserved unchanged** ([jump ↓](#part-b--the-qlora-research-foundation)).
 
 ---
 
-## 1. Engineering & methodology (the point of this project)
+## What it does
+
+- **Ask** an arbitrary biomedical question → a **live Fine-tuned + RAG** answer with
+  inline `[n]` citations, the retrieved passages, **per-claim verification** (each
+  factual claim flagged supported / unsupported), and end-to-end latency.
+- **Benchmark Explorer** → inspect a **precomputed 4-way comparison** on curated
+  questions (metrics, evidence, citations, latency) — no GPU needed.
+- **Reproducible pipeline** → ingest → chunk → embed → pgvector → retrieve →
+  rerank → cite; a 4-agent LangGraph workflow; and a benchmark that scores all
+  four configurations.
+
+## Architecture
+
+```
+HF Space (Gradio)  --/query-->  FastAPI (Render)  --SQL-->  Neon (pgvector)
+ Ask + Explorer         Planner→Retrieval→Answer→CitationVerify (LangGraph)
+                                     |
+                          HF Inference (Qwen2.5-7B + QLoRA adapter)
+```
+Full diagram + data flow: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The design
+is free-tier-honest: the 7B never runs on free CPU (served via HF Inference), and
+the 4-way comparison is precomputed so the live demo stays responsive.
+
+## 4-way evaluation
+
+Scored with the harness in `src/assistant/eval/` (`scripts/rag_benchmark.py`):
+
+| Config | Recall@5 | MRR | Citation coverage | Groundedness | ROUGE-L | p50 latency |
+|---|---|---|---|---|---|---|
+| Base | — | — | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN |
+| Fine-tuned | — | — | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN |
+| Base + RAG | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN |
+| Fine-tuned + RAG | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN |
+
+The harness is **validated end-to-end offline** (`python scripts/rag_benchmark.py
+--sample`, plus 12 passing CI tests); the numbers above fill after a GPU run over
+the curated corpus + eval set. `results/benchmark_explorer.json` then powers the
+live Explorer. (No fabricated numbers — same discipline as Part B.)
+
+## Quickstart
+
+```bash
+pip install -r requirements-assistant.txt        # RAG + agents + API
+python -m pytest tests/ -q                        # 12 CPU tests, no GPU
+python scripts/rag_benchmark.py --sample          # offline 4-way wiring check
+python scripts/rag_index.py --config configs/corpus.yaml   # build the real index
+uvicorn src.assistant.api.app:app --reload        # backend (GET /health, POST /query)
+```
+
+Deploy to free tier (Neon + Render + HF Spaces): [deploy/DEPLOY.md](deploy/DEPLOY.md).
+
+## API
+
+- `GET /health` — liveness + config (vector backend, provider, model-loaded).
+- `POST /query` `{"question": "..."}` → `GroundedAnswer` (answer, citations,
+  passages, per-claim verification, latency, tokens). Live Fine-tuned + RAG.
+- `GET /benchmark` — precomputed 4-way Benchmark Explorer data.
+
+## Engineering
+
+Modular `src/assistant/` (config · logging · schema · rag · agents · serving ·
+eval · api); pinned deps; **GitHub Actions CI** (`.github/workflows/ci.yml`) runs
+the research smoke test + RAG/agent/eval tests on every push; structured JSON
+logging with per-stage latency; a backend-agnostic vector store (local numpy /
+Neon pgvector) and framework-agnostic agents (LangGraph / sequential fallback) so
+dev + CI need no external services; Dockerized backend + one-command reproduction.
+
+---
+
+# Part B — the QLoRA research foundation
+
+_The original fine-tuning study the assistant is built on. Preserved unchanged;
+this is where the adapter and the "when does PEFT help" finding come from._
+
+## B1. Engineering & methodology (the point of this project)
 
 | Concern | How it's handled |
 |---|---|

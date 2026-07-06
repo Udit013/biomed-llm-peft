@@ -1,0 +1,22 @@
+# Render blueprint for the FastAPI backend (free tier).
+# Create a Neon Postgres + pgvector DB first and set DATABASE_URL below (as a
+# secret in the Render dashboard). The live model is served via HF Inference so
+# the free CPU instance never loads a 7B locally.
+services:
+  - type: web
+    name: biomed-assistant-api
+    runtime: docker
+    dockerfilePath: ./deploy/Dockerfile.api
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: BIOMED_VECTOR_BACKEND
+        value: pgvector
+      - key: BIOMED_DATABASE_URL
+        sync: false                 # set in dashboard (Neon DSN) — secret
+      - key: BIOMED_INFERENCE_PROVIDER
+        value: hf_inference
+      - key: BIOMED_ADAPTER_REPO
+        value: Udit013/qwen2.5-7b-medmcqa-qlora-5k
+      - key: BIOMED_HF_TOKEN
+        sync: false                 # set in dashboard — secret

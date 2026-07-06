@@ -1,0 +1,4 @@
+# HF Space (Gradio frontend). Lean — it calls the backend API for live answers
+# and reads bundled benchmark_explorer.json for the Explorer. No ML deps here.
+gradio==5.7.1
+httpx==0.28.1
