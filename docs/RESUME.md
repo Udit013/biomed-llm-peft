@@ -1,44 +1,21 @@
-# Résumé bullets
+# Résumé entry
 
-Every claim maps to code/tests in this repo or a measured experiment. Items that
-still need a GPU run or a live deploy are marked so you don't over-claim.
+Every claim below is backed by deployed infrastructure, published artifacts, or
+committed + CI-tested code in this repository.
 
-### Biomedical AI Research Assistant — RAG · Agents · QLoRA · Evaluation
-**Stack:** Python · Qwen2.5-7B-Instruct · QLoRA (bitsandbytes) · PEFT/TRL ·
-sentence-transformers · Neon Postgres + pgvector · LangGraph · FastAPI · Gradio ·
-Hugging Face Hub/Inference · Docker · GitHub Actions
+---
 
-**Backed and ready to claim now (implemented + tested):**
-- Built a modular **production RAG system** over PubMed + NIH/WHO/CDC guidelines —
-  reproducible ingestion (NCBI E-utilities), sentence-aware chunking, bge-small
-  embeddings, a **backend-agnostic vector store** (local numpy for dev/CI, **Neon
-  pgvector** for prod), semantic retrieval with metadata filtering, and
-  cross-encoder reranking.
-- Implemented a **LangGraph 4-agent workflow** (Planner → Retrieval → Answer →
-  **Citation-Verification**) that returns grounded, `[n]`-cited answers and flags
-  every unsupported claim, with a dependency-free sequential fallback.
-- Engineered a **4-way evaluation harness** (Base / Fine-tuned / Base+RAG /
-  Fine-tuned+RAG) covering retrieval (Recall@k, MRR), generation (citation
-  coverage, groundedness, ROUGE-L, BERTScore), and systems (p50/p95 latency,
-  tokens, estimated cost) — validated end-to-end offline with **12 CI tests**.
-- Fine-tuned **Qwen2.5-7B-Instruct with 4-bit QLoRA** on MedMCQA (~194K MCQs) on a
-  single free T4 and evaluated with EleutherAI lm-eval-harness: in-domain MedMCQA
-  **47.5% → 50.0%** (within noise — an honest null showing strong instruction
-  tuning already near-saturates) and out-of-domain PubMedQA **48.0% → 64.5%**.
-- **Deployed the assistant end-to-end on 100% free-tier infra** — Gradio
-  ([Space](https://huggingface.co/spaces/Udit013/biomed-assistant)) → FastAPI
-  ([Render](https://biomed-assistant-api.onrender.com/health)) → Neon pgvector
-  (3.4K biomedical chunks) → HF Inference (Qwen2.5-7B) — serving live, cited,
-  verified **Base + RAG** answers. Honestly labeled: the live config is exposed
-  by the API and shown in the UI, and swaps to **Fine-tuned + RAG** via a GPU
-  endpoint with **zero UI/API change**.
-- **Published** the [MedMCQA QLoRA adapter](https://huggingface.co/Udit013/qwen2.5-7b-medmcqa-qlora-5k)
-  to the HF Hub with a complete model card; shipped **Docker**, a free-tier
-  deployment blueprint, and **GitHub Actions CI** on every push. Separated
-  production code from the original research pipeline for clarity.
-
-**Still pending — only claim after a GPU benchmark run:**
-- Fill the 4-way benchmark numbers (`scripts/rag_benchmark.py` over the real
-  corpus) → then: "measured Recall@k / groundedness / latency across four configs,
-  showing RAG lifts groundedness from X→Y". (Adapter publish + live deploy are
-  now DONE and moved above.)
+### Biomedical AI Research Assistant
+**Live:** [huggingface.co/spaces/Udit013/biomed-assistant](https://huggingface.co/spaces/Udit013/biomed-assistant)
+**Model:** [Udit013/qwen2.5-7b-medmcqa-qlora-5k](https://huggingface.co/Udit013/qwen2.5-7b-medmcqa-qlora-5k)
+**Code:** [Udit013/biomed-llm-peft](https://github.com/Udit013/biomed-llm-peft)
+**Stack:** Python · PyTorch · Transformers · PEFT/QLoRA · LangGraph · FastAPI · Gradio · PostgreSQL + pgvector (Neon) · Hugging Face Hub/Inference · Docker · GitHub Actions
+**Description:** A production-grade Biomedical AI Research Assistant that answers clinical/research questions with grounded, cited evidence — retrieval-augmented generation over PubMed abstracts and NIH/WHO/CDC guidelines, a LangGraph multi-agent workflow with per-claim citation verification, and a 4-way evaluation harness (Base / Fine-tuned / Base + RAG / Fine-tuned + RAG) — built on a QLoRA-fine-tuned Qwen2.5-7B and deployed end-to-end on 100% free-tier infrastructure.
+**Bullets:**
+- Fine-tuned **Qwen2.5-7B-Instruct with 4-bit QLoRA** (only **0.92%** of parameters trainable) on **MedMCQA (~194K** medical MCQs**)** and evaluated with **EleutherAI lm-evaluation-harness**, measuring in-domain MedMCQA **47.5% → 50.0%** (a within-noise null showing strong instruction tuning already near-saturates the task) and out-of-domain PubMedQA **48.0% → 64.5%**; **published** the adapter to the Hugging Face Hub with a full model card.
+- Built a **production RAG pipeline** over biomedical literature — reproducible ingestion (NCBI E-utilities), sentence-aware chunking, `bge-small` embeddings, semantic retrieval with metadata filtering, cross-encoder reranking, and inline citation generation — indexing **733 PubMed abstracts into 3,410 vector chunks** in **Neon PostgreSQL + pgvector**.
+- Implemented a **LangGraph 4-agent workflow** (Planner → Retrieval → Answer → **Citation-Verification**) that returns grounded, `[n]`-cited answers and flags every factual claim as supported or unsupported, with a dependency-free sequential fallback for testing.
+- **Deployed the system end-to-end on 100% free-tier infrastructure** (Gradio Space → FastAPI on Render → Neon pgvector → HF Inference) serving live, cited **Base + RAG** answers at **~4 s** end-to-end; the API returns the exact config it served and the UI displays it, so a **swap to Fine-tuned + RAG via a GPU endpoint requires zero UI or API change**.
+- Engineered a **backend-agnostic, torch-free serving path** for the free tier — a vector-store abstraction (local NumPy for dev/CI, Neon pgvector for prod), local **ONNX query embeddings** (fastembed), and a router-based HF Inference LLM — small enough to run on a 512 MB instance.
+- Designed a **4-way evaluation harness** comparing Base / Fine-tuned / Base + RAG / Fine-tuned + RAG across **retrieval** (Recall@k, MRR), **generation** (citation coverage, groundedness, ROUGE-L, BERTScore), and **systems** (p50/p95 latency, token usage, estimated cost), rendering comparison tables and an interactive Benchmark Explorer.
+- Established **production engineering rigor** — a modular package cleanly separating the research pipeline from the production system, pinned dependencies, a Dockerized backend, structured JSON logging with per-stage latency, and **GitHub Actions CI running a 12-test suite** on every push.
