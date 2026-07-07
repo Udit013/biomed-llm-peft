@@ -25,14 +25,20 @@ Hugging Face Hub/Inference · Docker · GitHub Actions
   single free T4 and evaluated with EleutherAI lm-eval-harness: in-domain MedMCQA
   **47.5% → 50.0%** (within noise — an honest null showing strong instruction
   tuning already near-saturates) and out-of-domain PubMedQA **48.0% → 64.5%**.
-- Shipped a **FastAPI** backend (live FT+RAG `/query`, `/benchmark`, `/health`),
-  a **Gradio** demo (live Ask + precomputed Benchmark Explorer), **Docker**, a
-  free-tier deployment blueprint (Neon + Render + HF Spaces), and **CI** on every
-  push. Separated production code from the original research pipeline for clarity.
+- **Deployed the assistant end-to-end on 100% free-tier infra** — Gradio
+  ([Space](https://huggingface.co/spaces/Udit013/biomed-assistant)) → FastAPI
+  ([Render](https://biomed-assistant-api.onrender.com/health)) → Neon pgvector
+  (3.4K biomedical chunks) → HF Inference (Qwen2.5-7B) — serving live, cited,
+  verified **Base + RAG** answers. Honestly labeled: the live config is exposed
+  by the API and shown in the UI, and swaps to **Fine-tuned + RAG** via a GPU
+  endpoint with **zero UI/API change**.
+- **Published** the [MedMCQA QLoRA adapter](https://huggingface.co/Udit013/qwen2.5-7b-medmcqa-qlora-5k)
+  to the HF Hub with a complete model card; shipped **Docker**, a free-tier
+  deployment blueprint, and **GitHub Actions CI** on every push. Separated
+  production code from the original research pipeline for clarity.
 
-**Only after a GPU benchmark run / live deploy (do NOT claim until done):**
+**Still pending — only claim after a GPU benchmark run:**
 - Fill the 4-way benchmark numbers (`scripts/rag_benchmark.py` over the real
-  corpus) → then: "measured Recall@k/groundedness/latency across four configs,
-  showing RAG lifts groundedness from X→Y".
-- Publish the adapter to HF Hub + deploy the Space/backend → then: "deployed a
-  live cited-QA assistant on free-tier infra."
+  corpus) → then: "measured Recall@k / groundedness / latency across four configs,
+  showing RAG lifts groundedness from X→Y". (Adapter publish + live deploy are
+  now DONE and moved above.)
