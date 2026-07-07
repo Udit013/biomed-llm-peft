@@ -8,7 +8,7 @@ a LangGraph multi-agent workflow with **citation verification**, and a rigorous
 
 > ⚠️ **Not for clinical use.** Research and education only.
 
-**Live demo:** _[HF Space URL after deploy]_ · **Model:** [Udit013/qwen2.5-7b-medmcqa-qlora-5k](https://huggingface.co/Udit013/qwen2.5-7b-medmcqa-qlora-5k) · **Deploy:** [deploy/DEPLOY.md](deploy/DEPLOY.md) · **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+**Live demo:** [huggingface.co/spaces/Udit013/biomed-assistant](https://huggingface.co/spaces/Udit013/biomed-assistant) · **API:** [biomed-assistant-api.onrender.com](https://biomed-assistant-api.onrender.com/health) · **Deploy:** [deploy/DEPLOY.md](deploy/DEPLOY.md) · **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 This repo has **two clearly-separated layers**:
 - **Part A — Production assistant** (`src/assistant/`): RAG + agents + serving + eval + deploy (this section).
