@@ -15,7 +15,7 @@ services:
       - key: BIOMED_DATABASE_URL
         sync: false                 # set in dashboard (Neon DSN) — secret
       - key: BIOMED_EMBEDDING_PROVIDER
-        value: hf_inference         # query embeddings via HF Inference (torch-free)
+        value: fastembed            # local ONNX embeddings (torch-free, no HF host)
       - key: BIOMED_USE_RERANKER
         value: "false"              # cross-encoder needs torch; off on free tier
       - key: BIOMED_INFERENCE_PROVIDER

@@ -10,10 +10,13 @@ numpy==1.26.4
 pgvector==0.3.6
 psycopg[binary]==3.2.3
 
-# Agents + HF Inference (embeddings + LLM)
+# Local ONNX query embeddings (torch-free; no external inference host)
+fastembed==0.4.2
+
+# Agents + HF Inference (LLM only, via router.huggingface.co)
 langgraph==0.2.53
 langchain-core==0.3.21
-huggingface-hub==0.26.2
+huggingface-hub==0.34.4          # router-based InferenceClient (old host is dead)
 httpx==0.28.1
 
 # API

@@ -82,7 +82,39 @@ class HFInferenceEmbedder:
         return self._embed_one(_QUERY_PREFIX + query)
 
 
+class FastEmbedEmbedder:
+    """Local ONNX embeddings via fastembed — torch-free and reliable.
+
+    The free-tier default for serving: no external inference host (so it can't be
+    broken by HF endpoint migrations), tiny footprint, CPU-only. Same
+    BAAI/bge-small-en-v1.5 weights as the index, so vectors are compatible.
+    fastembed applies bge's query instruction in `query_embed`.
+    """
+
+    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5"):
+        self.model_name = model_name
+        self._model = None
+
+    def _load(self):
+        if self._model is None:
+            from fastembed import TextEmbedding
+
+            self._model = TextEmbedding(model_name=self.model_name)
+        return self._model
+
+    def embed_documents(self, texts: list[str]) -> np.ndarray:
+        model = self._load()
+        return np.vstack([_l2(np.asarray(v, dtype=np.float32)) for v in model.embed(list(texts))])
+
+    def embed_query(self, query: str) -> np.ndarray:
+        model = self._load()
+        vec = next(iter(model.query_embed([query])))
+        return _l2(np.asarray(vec, dtype=np.float32))
+
+
 def get_embedder(provider: str, model_name: str, token: str | None = None):
+    if provider == "fastembed":
+        return FastEmbedEmbedder(model_name)
     if provider == "hf_inference":
         return HFInferenceEmbedder(model_name, token=token)
     return Embedder(model_name)
