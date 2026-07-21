@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import zlib
 
 import numpy as np
 
@@ -11,13 +12,17 @@ _W = re.compile(r"[a-z0-9]+")
 
 
 class FakeEmbedder:
-    """Hashed bag-of-words -> unit vector. Deterministic."""
+    """Hashed bag-of-words -> unit vector. Deterministic across processes.
+
+    Uses zlib.crc32 (stable) rather than Python's per-process-randomized hash(),
+    so retrieval order in tests is reproducible.
+    """
     dim = 64
 
     def _vec(self, text: str) -> np.ndarray:
         v = np.zeros(self.dim, dtype=np.float32)
         for w in _W.findall(text.lower()):
-            v[hash(w) % self.dim] += 1.0
+            v[zlib.crc32(w.encode()) % self.dim] += 1.0
         n = np.linalg.norm(v)
         return v / n if n else v
 

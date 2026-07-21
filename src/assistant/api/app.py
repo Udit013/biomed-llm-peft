@@ -17,10 +17,13 @@ NOT FOR CLINICAL USE — research/education only.
 from __future__ import annotations
 
 import json
+import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from ..config import get_settings
@@ -44,7 +47,7 @@ def served_config(cfg) -> str:
 
 
 class QueryRequest(BaseModel):
-    question: str = Field(..., min_length=3,
+    question: str = Field(..., min_length=3, max_length=1000,
                           examples=["What is first-line therapy for type 2 diabetes?"])
 
 
@@ -85,7 +88,25 @@ app = FastAPI(title="Biomedical AI Research Assistant",
               description="Live RAG QA with citations (Base + RAG on free tier; the "
                           "response's `config` field states what was actually served). "
                           "NOT for clinical use.",
-              lifespan=lifespan)
+              version="1.0.0", lifespan=lifespan)
+
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"],
+                   allow_headers=["*"])
+
+
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    """Attach a request id + server-timing to every response, and log it."""
+    rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    t0 = time.perf_counter()
+    response = await call_next(request)
+    dt = round((time.perf_counter() - t0) * 1000, 1)
+    response.headers["X-Request-ID"] = rid
+    response.headers["X-Response-Time-ms"] = str(dt)
+    log.info("request", extra={"request_id": rid, "method": request.method,
+                               "path": request.url.path,
+                               "status": response.status_code, "latency_ms": dt})
+    return response
 
 
 @app.get("/health")

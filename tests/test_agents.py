@@ -64,5 +64,22 @@ def test_base_config_skips_retrieval(tmp_path):
     assert ans.answer
 
 
+def test_semantic_grounding():
+    from src.assistant.rag.citations import verify_claims_semantic
+    from src.assistant.schema import Chunk, RetrievedPassage
+
+    p = RetrievedPassage(chunk=Chunk(
+        chunk_id="w::0", doc_id="who:x", source="who", title="t",
+        text="Thiazide diuretics and ACE inhibitors are first-line for hypertension.",
+        ordinal=0), score=0.9)
+    emb = FakeEmbedder()
+    claims, ok = verify_claims_semantic(
+        "Thiazide diuretics are first-line for hypertension.", [p], emb, threshold=0.4)
+    assert claims and claims[0]["supported"] and ok
+    _, ok2 = verify_claims_semantic(
+        "Aspirin cures the common cold entirely.", [p], emb, threshold=0.6)
+    assert not ok2
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

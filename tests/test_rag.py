@@ -21,23 +21,7 @@ from src.assistant.rag.pipeline import RAGPipeline
 from src.assistant.rag.store import LocalVectorStore
 from src.assistant.schema import Document, RetrievedPassage, Chunk
 from src.assistant.config import Settings
-
-_W = re.compile(r"[a-z0-9]+")
-
-
-class FakeEmbedder:
-    """Hashed bag-of-words -> unit vector. Deterministic, no downloads."""
-    dim = 64
-
-    def _vec(self, text: str) -> np.ndarray:
-        v = np.zeros(self.dim, dtype=np.float32)
-        for w in _W.findall(text.lower()):
-            v[hash(w) % self.dim] += 1.0
-        n = np.linalg.norm(v)
-        return v / n if n else v
-
-    def embed_documents(self, texts): return np.vstack([self._vec(t) for t in texts])
-    def embed_query(self, query):    return self._vec(query)
+from _fakes import FakeEmbedder            # shared, deterministic (crc32) fake
 
 
 def test_split_sentences():

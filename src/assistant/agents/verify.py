@@ -7,7 +7,7 @@ configs there is no evidence to verify against, so verification is skipped.
 """
 from __future__ import annotations
 
-from ..rag.citations import verify_claims
+from ..rag.citations import verify_claims, verify_claims_semantic
 from .state import AgentState, Deps
 
 
@@ -17,7 +17,13 @@ def verify(state: AgentState, deps: Deps) -> AgentState:
     if not passages or not answer_text:
         return {"claims": [], "all_supported": None}
 
-    claims, all_ok = verify_claims(answer_text, passages)
+    cfg = deps.pipeline.cfg
+    if getattr(cfg, "grounding_method", "semantic") == "semantic":
+        claims, all_ok = verify_claims_semantic(
+            answer_text, passages, deps.pipeline.embedder,
+            threshold=getattr(cfg, "grounding_threshold", 0.6))
+    else:
+        claims, all_ok = verify_claims(answer_text, passages)
 
     # Mark each citation supported if any supported claim maps to its passage.
     supported_passages = {c["passage_index"] for c in claims

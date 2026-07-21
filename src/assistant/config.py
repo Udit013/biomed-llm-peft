@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     retrieve_top_k: int = 20                                # candidates before rerank
     rerank_top_k: int = 5                                   # passages kept after rerank
     use_reranker: bool = True
+    grounding_method: str = "semantic"                      # "semantic" | "lexical"
+    grounding_threshold: float = 0.6                        # cosine (semantic) cutoff
     embedding_provider: str = "local"                       # "local" | "hf_inference"
     #   local        -> sentence-transformers (index building; batch throughput)
     #   hf_inference -> HF Inference feature-extraction (torch-free serving image)
