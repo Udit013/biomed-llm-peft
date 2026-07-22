@@ -41,7 +41,8 @@ Two clearly-separated layers in one repo:
    embeddings → pgvector (prod) or local numpy (dev/CI).
 3. **Serve a query** — the LangGraph agents run Planner (strategy + metadata
    filter) → Retrieval (semantic + rerank) → Answer (grounded, cited generation)
-   → Citation-Verification (per-claim lexical grounding), returning a typed
+   → Citation-Verification (per-claim semantic grounding, cosine of each claim vs
+   the evidence; configurable), returning a typed
    `GroundedAnswer` with citations, evidence, verification, latency, and tokens.
 
 ### Evaluation (`src/assistant/eval/`)
