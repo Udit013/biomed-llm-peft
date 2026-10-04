@@ -1,5 +1,5 @@
 ---
-title: Biomedical AI Research Assistant
+title: Veritome
 emoji: 🩺
 colorFrom: indigo
 colorTo: blue
@@ -10,7 +10,7 @@ pinned: false
 license: apache-2.0
 ---
 
-# Biomedical AI Research Assistant
+# Veritome — Biomedical AI Research Assistant
 
 Grounded, cited biomedical question answering over PubMed abstracts + NIH/WHO/CDC
 guidelines, built on `Qwen2.5-7B-Instruct` + a MedMCQA QLoRA adapter.

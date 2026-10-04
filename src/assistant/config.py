@@ -46,10 +46,21 @@ class Settings(BaseSettings):
     inference_provider: str = "local"                       # "local" | "hf_inference"
     hf_token: str | None = None
     max_new_tokens: int = 512
+    # Ordered HF Inference providers, tried in turn (comma-separated). "auto" lets
+    # HF pick, which can route to a provider whose mapping is broken.
+    hf_providers: str = "featherless-ai,auto"
+    inference_timeout_s: float = 60.0
+
+    # ---- API protection ----
+    rate_limit_per_minute: int = 20                         # /query per client; 0 = off
 
     # ---- Ingestion (NCBI E-utilities) ----
     ncbi_email: str | None = None                           # courtesy header for NCBI
     ncbi_api_key: str | None = None                         # higher rate limit if set
+
+    @property
+    def hf_provider_list(self) -> list[str]:
+        return [p.strip() for p in self.hf_providers.split(",") if p.strip()] or ["auto"]
 
     def ensure_dirs(self) -> None:
         for d in (self.index_dir, self.corpus_dir):

@@ -13,6 +13,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+from ..logging import get_logger
+
+log = get_logger(__name__)
+
+
+class UpstreamError(RuntimeError):
+    """The hosted model could not produce an answer (all providers failed)."""
+
 
 @dataclass
 class GenerationResult:
@@ -63,27 +71,49 @@ class LocalTransformersProvider(LLMProvider):
 
 
 class HFInferenceProvider(LLMProvider):
-    def __init__(self, model: str, token: str | None = None, max_new_tokens: int = 512):
+    """HF Inference router with an explicit, ordered provider list.
+
+    `auto` routing can pick a provider whose mapping for the model is broken (in
+    Sep 2026 it kept routing Qwen2.5-7B to Together after Together dropped it, so
+    every query 502'd while /health stayed green). Pinning an ordered list and
+    falling through on failure keeps the demo up when one provider disappears.
+    """
+
+    def __init__(self, model: str, token: str | None = None, max_new_tokens: int = 512,
+                 providers: list[str] | None = None, timeout: float = 60.0):
         self.model = model
         self.token = token
         self.max_new_tokens = max_new_tokens
+        self.providers = providers or ["auto"]
+        self.timeout = timeout
         self.name = "hf_inference"
-        self._client = None
+        self._clients: dict = {}
 
-    def _get_client(self):
-        if self._client is None:
+    def _get_client(self, provider: str):
+        if provider not in self._clients:
             from huggingface_hub import InferenceClient
 
-            self._client = InferenceClient(model=self.model, token=self.token)
-        return self._client
+            self._clients[provider] = InferenceClient(
+                model=self.model, token=self.token, provider=provider,
+                timeout=self.timeout)
+        return self._clients[provider]
 
     def generate(self, messages: list[dict]) -> GenerationResult:
-        resp = self._get_client().chat_completion(
-            messages=messages, max_tokens=self.max_new_tokens, temperature=0.0)
-        text = resp.choices[0].message.content or ""
-        usage = getattr(resp, "usage", None)
-        return GenerationResult(
-            text.strip(),
-            getattr(usage, "prompt_tokens", 0) or 0,
-            getattr(usage, "completion_tokens", 0) or 0,
-        )
+        errors = []
+        for provider in self.providers:
+            try:
+                resp = self._get_client(provider).chat_completion(
+                    messages=messages, max_tokens=self.max_new_tokens, temperature=0.0)
+            except Exception as exc:  # provider down / model unmapped -> try next
+                errors.append(f"{provider}: {type(exc).__name__}")
+                log.warning("inference provider failed",
+                            extra={"provider": provider, "error": str(exc)[:300]})
+                continue
+            text = resp.choices[0].message.content or ""
+            usage = getattr(resp, "usage", None)
+            return GenerationResult(
+                text.strip(),
+                getattr(usage, "prompt_tokens", 0) or 0,
+                getattr(usage, "completion_tokens", 0) or 0,
+            )
+        raise UpstreamError("all inference providers failed (" + "; ".join(errors) + ")")

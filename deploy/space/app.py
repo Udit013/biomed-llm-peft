@@ -38,6 +38,7 @@ EXAMPLES = [
 CSS = """
 :root { --biomed-radius: 12px; }
 .biomed-header h1 { margin: 0 0 4px; font-size: 1.55rem; letter-spacing: -0.02em; }
+.biomed-tagline { font-style: italic; opacity: 0.8; margin-bottom: 4px; }
 .biomed-sub { color: var(--body-text-color-subdued); font-size: 0.95rem; margin-bottom: 8px; }
 .biomed-disclaimer { font-size: 0.8rem; color: var(--body-text-color-subdued);
   border-left: 3px solid #f59e0b; padding: 2px 10px; margin: 6px 0 2px; }
@@ -146,6 +147,8 @@ def _render_evidence(passages: list, citations: list) -> str:
         gdot = ('<span class="grounded" style="color:#16a34a">● grounded</span>' if grounded
                 else '<span class="grounded" style="color:var(--body-text-color-subdued)">○</span>')
         url = ch.get("url") or "#"
+        if not url.startswith(("https://", "http://")):   # no javascript:/data: links
+            url = "#"
         title = html.escape(ch.get("title", "(untitled)"))
         cards.append(
             f'<div class="ev-card"><div class="ev-head">'
@@ -236,12 +239,13 @@ def backend_status() -> str:
 theme = gr.themes.Soft(primary_hue="blue", secondary_hue="teal",
                        font=[gr.themes.GoogleFont("Inter"), "system-ui", "sans-serif"])
 
-with gr.Blocks(title="Biomedical AI Research Assistant", theme=theme, css=CSS,
+with gr.Blocks(title="Veritome — Biomedical AI Research Assistant", theme=theme, css=CSS,
                analytics_enabled=False) as demo:
     gr.HTML(
-        '<div class="biomed-header"><h1>🩺 Biomedical AI Research Assistant</h1>'
-        '<div class="biomed-sub">Grounded, cited answers over PubMed + NIH/WHO/CDC '
-        'guidelines — retrieval-augmented generation with a multi-agent workflow and '
+        '<div class="biomed-header"><h1>🩺 Veritome</h1>'
+        '<div class="biomed-tagline">Every claim, traced to its source.</div>'
+        '<div class="biomed-sub">Biomedical AI research assistant — grounded, cited answers '
+        'over PubMed via retrieval-augmented generation, a multi-agent workflow, and '
         'per-claim verification.</div>'
         f'<div class="metastrip" style="margin-top:2px">'
         f'<span class="pill"><a href="{REPO}" target="_blank">Code ↗</a></span>'

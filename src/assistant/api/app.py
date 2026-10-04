@@ -17,8 +17,10 @@ NOT FOR CLINICAL USE — research/education only.
 from __future__ import annotations
 
 import json
+import threading
 import time
 import uuid
+from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -28,9 +30,11 @@ from pydantic import BaseModel, Field
 
 from ..config import get_settings
 from ..logging import get_logger
+from ..serving.providers import UpstreamError
 
 log = get_logger(__name__)
 _STATE: dict = {}
+_BUILD_LOCK = threading.Lock()   # /query runs in a threadpool: build the service once
 _EXPLORER_PATH = Path("results/benchmark_explorer.json")
 
 CONFIG_DISPLAY = {"base_rag": "Base + RAG", "ft_rag": "Fine-tuned + RAG"}
@@ -63,7 +67,9 @@ def _build_service():
         # Serverless HF Inference can't serve a custom LoRA adapter, so it serves
         # the BASE model -> honestly "Base + RAG".
         provider = HFInferenceProvider(cfg.base_model, token=cfg.hf_token,
-                                       max_new_tokens=cfg.max_new_tokens)
+                                       max_new_tokens=cfg.max_new_tokens,
+                                       providers=cfg.hf_provider_list,
+                                       timeout=cfg.inference_timeout_s)
     else:
         # GPU/local backend with the adapter -> true "Fine-tuned + RAG".
         provider = LocalTransformersProvider(cfg.base_model, adapter_dir=cfg.adapter_repo,
@@ -71,11 +77,56 @@ def _build_service():
     return AssistantService(pipeline, provider, config_label=served_config(cfg), settings=cfg)
 
 
+class RateLimiter:
+    """Sliding-window limit per client key. In-memory: correct for the single
+    free-tier instance; multiple replicas would need a shared store (Redis)."""
+
+    def __init__(self, per_minute: int, window_s: float = 60.0):
+        self.per_minute, self.window_s = per_minute, window_s
+        self._hits: dict[str, deque] = {}
+        self._lock = threading.Lock()
+
+    def check(self, key: str, now: float | None = None) -> float:
+        """Record a hit; return 0 if allowed, else seconds until a slot frees."""
+        if self.per_minute <= 0:
+            return 0.0
+        now = time.monotonic() if now is None else now
+        with self._lock:
+            q = self._hits.setdefault(key, deque())
+            while q and now - q[0] >= self.window_s:
+                q.popleft()
+            if len(q) >= self.per_minute:
+                return self.window_s - (now - q[0])
+            q.append(now)
+            if len(self._hits) > 10_000:          # bound memory under key churn
+                self._hits = {k: v for k, v in self._hits.items() if v}
+            return 0.0
+
+
+def _client_key(request: Request) -> str:
+    # Render terminates TLS at a proxy; the first X-Forwarded-For hop is the client.
+    fwd = request.headers.get("x-forwarded-for", "")
+    return fwd.split(",")[0].strip() or (request.client.host if request.client else "?")
+
+
+def _get_service():
+    svc = _STATE.get("service")
+    if svc is None:
+        with _BUILD_LOCK:
+            svc = _STATE.get("service")
+            if svc is None:
+                log.info("cold start: building RAG service")
+                svc = _STATE["service"] = _build_service()
+    return svc
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     cfg = get_settings()
     _STATE["cfg"] = cfg
     _STATE["service"] = None  # lazy — built on first /query (cold start)
+    _STATE["limiter"] = RateLimiter(cfg.rate_limit_per_minute)
+    _STATE["last_query"] = None
     if _EXPLORER_PATH.exists():
         _STATE["benchmark"] = json.loads(_EXPLORER_PATH.read_text())
     log.info("api ready", extra={"backend": cfg.vector_backend,
@@ -97,7 +148,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"],
 @app.middleware("http")
 async def request_context(request: Request, call_next):
     """Attach a request id + server-timing to every response, and log it."""
-    rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    rid = (request.headers.get("x-request-id") or "")[:64] or uuid.uuid4().hex[:12]
+    request.state.request_id = rid
     t0 = time.perf_counter()
     response = await call_next(request)
     dt = round((time.perf_counter() - t0) * 1000, 1)
@@ -119,21 +171,43 @@ def health() -> dict:
             "vector_backend": getattr(cfg, "vector_backend", None),
             "inference_provider": getattr(cfg, "inference_provider", None),
             "model_loaded": _STATE.get("service") is not None,
-            "benchmark_available": "benchmark" in _STATE}
+            "benchmark_available": "benchmark" in _STATE,
+            # Liveness alone hid a total /query outage; expose the last real outcome.
+            "last_query": _STATE.get("last_query")}
 
 
 @app.post("/query")
-def query(req: QueryRequest) -> dict:
+def query(req: QueryRequest, request: Request) -> dict:
+    rid = getattr(request.state, "request_id", "")
+    limiter = _STATE.get("limiter")
+    retry = limiter.check(_client_key(request)) if limiter else 0.0
+    if retry:
+        raise HTTPException(429, "Rate limit exceeded; try again shortly.",
+                            headers={"Retry-After": str(int(retry) + 1)})
     try:
-        if _STATE.get("service") is None:
-            log.info("cold start: building RAG service")
-            _STATE["service"] = _build_service()
-        ans = _STATE["service"].answer(req.question)
-        return ans.model_dump()
-    except Exception as exc:  # surface the real cause (embedding / LLM / DB) + log trace
-        _STATE["service"] = None      # don't cache a half-built service; allow retry
-        log.error("query failed", extra={"error": str(exc)}, exc_info=True)
-        raise HTTPException(502, f"{type(exc).__name__}: {exc}")
+        svc = _get_service()
+    except Exception:
+        _record(False, "startup")
+        log.error("service build failed", extra={"request_id": rid}, exc_info=True)
+        raise HTTPException(503, f"Backend is starting or misconfigured (request {rid}).")
+    try:
+        ans = svc.answer(req.question)
+    except UpstreamError:
+        _record(False, "model")
+        log.error("generation failed", extra={"request_id": rid}, exc_info=True)
+        raise HTTPException(502, f"The hosted language model is unavailable right now "
+                                 f"(request {rid}). Please retry in a minute.")
+    except Exception:
+        # Details (DSNs, provider internals) stay in logs, never in the response.
+        _record(False, "internal")
+        log.error("query failed", extra={"request_id": rid}, exc_info=True)
+        raise HTTPException(502, f"Query failed (request {rid}).")
+    _record(True)
+    return ans.model_dump()
+
+
+def _record(ok: bool, stage: str | None = None) -> None:
+    _STATE["last_query"] = {"ok": ok, "failed_stage": stage, "at": int(time.time())}
 
 
 @app.get("/benchmark")

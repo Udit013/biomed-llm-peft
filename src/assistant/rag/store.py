@@ -13,6 +13,7 @@ L2-normalized (see embed.py), so cosine == inner product.
 from __future__ import annotations
 
 import json
+import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
@@ -106,18 +107,48 @@ class PgVectorStore(VectorStore):
 
     def __init__(self, dsn: str, dim: int, table: str = "biomed_chunks"):
         self.dsn, self.dim, self.table = dsn, dim, table
+        self._conn = None
+        self._lock = threading.Lock()   # one psycopg connection, used serially
         self._ensure_schema()
 
     def _connect(self):
         import psycopg
         from pgvector.psycopg import register_vector
 
-        conn = psycopg.connect(self.dsn)
+        conn = psycopg.connect(self.dsn, connect_timeout=10)
         register_vector(conn)
         return conn
 
+    def _run(self, fn):
+        """Run fn(cursor) on a reused connection, reconnecting once if it dropped.
+
+        Opening a fresh TLS connection to Neon per search added a full handshake
+        to every query; Neon also closes idle connections, hence the single retry.
+        """
+        import psycopg
+
+        with self._lock:
+            for attempt in (0, 1):
+                if self._conn is None or self._conn.closed:
+                    self._conn = self._connect()
+                try:
+                    with self._conn.cursor() as cur:
+                        out = fn(cur)
+                    self._conn.commit()
+                    return out
+                except psycopg.OperationalError:
+                    try:
+                        self._conn.close()
+                    finally:
+                        self._conn = None
+                    if attempt:
+                        raise
+                except Exception:
+                    self._conn.rollback()
+                    raise
+
     def _ensure_schema(self) -> None:
-        with self._connect() as conn, conn.cursor() as cur:
+        def ddl(cur):
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
             cur.execute(f"""
                 CREATE TABLE IF NOT EXISTS {self.table} (
@@ -128,22 +159,25 @@ class PgVectorStore(VectorStore):
             cur.execute(
                 f"CREATE INDEX IF NOT EXISTS {self.table}_emb_idx ON {self.table} "
                 f"USING hnsw (embedding vector_cosine_ops)")
-            conn.commit()
+        self._run(ddl)
 
     def add(self, embedded: list[EmbeddedChunk]) -> None:
-        with self._connect() as conn, conn.cursor() as cur:
-            for e in embedded:
-                c = e.chunk
-                cur.execute(
-                    f"""INSERT INTO {self.table}
-                        (chunk_id, doc_id, source, title, text, ordinal, url, year,
-                         metadata, embedding)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                        ON CONFLICT (chunk_id) DO UPDATE SET embedding = EXCLUDED.embedding""",
-                    (c.chunk_id, c.doc_id, c.source, c.title, c.text, c.ordinal, c.url,
-                     int(c.metadata.get("year", 0) or 0), json.dumps(c.metadata),
-                     np.asarray(e.embedding, dtype=np.float32)))
-            conn.commit()
+        rows = [(e.chunk.chunk_id, e.chunk.doc_id, e.chunk.source, e.chunk.title,
+                 e.chunk.text, e.chunk.ordinal, e.chunk.url,
+                 int(e.chunk.metadata.get("year", 0) or 0), json.dumps(e.chunk.metadata),
+                 np.asarray(e.embedding, dtype=np.float32)) for e in embedded]
+        # Upsert EVERY column: refreshing only the embedding left stale text/title
+        # paired with a new vector when a document was re-chunked.
+        self._run(lambda cur: cur.executemany(
+            f"""INSERT INTO {self.table}
+                (chunk_id, doc_id, source, title, text, ordinal, url, year,
+                 metadata, embedding)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (chunk_id) DO UPDATE SET
+                  doc_id = EXCLUDED.doc_id, source = EXCLUDED.source,
+                  title = EXCLUDED.title, text = EXCLUDED.text,
+                  ordinal = EXCLUDED.ordinal, url = EXCLUDED.url, year = EXCLUDED.year,
+                  metadata = EXCLUDED.metadata, embedding = EXCLUDED.embedding""", rows))
 
     def search(self, query_vec, k, metadata_filter=None) -> list[RetrievedPassage]:
         where, params = "", [np.asarray(query_vec, dtype=np.float32)]
@@ -156,14 +190,15 @@ class PgVectorStore(VectorStore):
         if clauses:
             where = "WHERE " + " AND ".join(clauses)
         params.append(k)
-        with self._connect() as conn, conn.cursor() as cur:
+        def q(cur):
             cur.execute(
                 f"""SELECT chunk_id, doc_id, source, title, text, ordinal, url, metadata,
                            1 - (embedding <=> %s) AS score
                     FROM {self.table} {where}
                     ORDER BY embedding <=> %s LIMIT %s""",
                 [params[0], *params[1:-1], params[0], params[-1]])
-            rows = cur.fetchall()
+            return cur.fetchall()
+        rows = self._run(q)
         out = []
         for i, r in enumerate(rows):
             chunk = Chunk(chunk_id=r[0], doc_id=r[1], source=r[2], title=r[3], text=r[4],
@@ -172,9 +207,10 @@ class PgVectorStore(VectorStore):
         return out
 
     def count(self) -> int:
-        with self._connect() as conn, conn.cursor() as cur:
+        def q(cur):
             cur.execute(f"SELECT COUNT(*) FROM {self.table}")
             return int(cur.fetchone()[0])
+        return self._run(q)
 
 
 def get_store(backend: str, index_dir, dim: int, dsn: str | None = None) -> VectorStore:

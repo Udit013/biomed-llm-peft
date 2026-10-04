@@ -55,7 +55,7 @@ Scored with the harness in `src/assistant/eval/` (`scripts/rag_benchmark.py`):
 | Fine-tuned + RAG | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN |
 
 The harness is **validated end-to-end offline** (`python scripts/rag_benchmark.py
---sample`, plus 12 passing CI tests); the numbers above fill after a GPU run over
+--sample`, plus 22 passing CI tests); the numbers above fill after a GPU run over
 the curated corpus + eval set. `results/benchmark_explorer.json` then powers the
 live Explorer. (No fabricated numbers — same discipline as Part B.)
 

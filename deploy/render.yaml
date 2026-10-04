@@ -20,6 +20,10 @@ services:
         value: "false"              # cross-encoder needs torch; off on free tier
       - key: BIOMED_INFERENCE_PROVIDER
         value: hf_inference
+      - key: BIOMED_HF_PROVIDERS
+        value: featherless-ai,auto  # ordered fallback; "auto" alone routed to a dead provider
+      - key: BIOMED_RATE_LIMIT_PER_MINUTE
+        value: "20"                 # caps token spend; all Space traffic shares one client IP
       - key: BIOMED_ADAPTER_REPO
         value: Udit013/qwen2.5-7b-medmcqa-qlora-5k
       - key: BIOMED_HF_TOKEN
