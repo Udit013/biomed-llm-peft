@@ -54,6 +54,19 @@ class RAGPipeline:
                                        "total": self.store.count()})
         return n_chunks
 
+    def embed_corpus(self, documents: list[Document], batch: int = 256
+                     ) -> list[EmbeddedChunk]:
+        """Chunk + embed every document WITHOUT writing (for an atomic rebuild)."""
+        chunks = [c for d in documents
+                  for c in chunk_document(d, self.cfg.chunk_size, self.cfg.chunk_overlap)]
+        out: list[EmbeddedChunk] = []
+        for i in range(0, len(chunks), batch):
+            part = chunks[i:i + batch]
+            vecs = self.embedder.embed_documents([c.text for c in part])
+            out.extend(EmbeddedChunk(chunk=c, embedding=v.tolist()) for c, v in zip(part, vecs))
+            log.info("embedded", extra={"done": len(out), "total": len(chunks)})
+        return out
+
     # ---- retrieval ----
     def retrieve_context(self, query: str, metadata_filter: dict | None = None
                          ) -> tuple[list[RetrievedPassage], list[Citation], dict]:

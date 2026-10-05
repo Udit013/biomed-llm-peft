@@ -60,3 +60,15 @@ def test_embeddings_never_serialized_in_api_payload():
     ans = GroundedAnswer(query="q", answer="a", passages=[_p("x", emb=[0.1] * 4)])
     assert "embedding" not in ans.model_dump()["passages"][0]
     assert "embedding" not in ans.model_dump_json()
+
+
+def test_stray_abstention_removed_only_when_answer_has_cited_claims():
+    from src.assistant.rag.citations import strip_stray_abstention
+    mixed = ("DOACs need no routine monitoring [5]. They cause less intracranial "
+             "bleeding [3]. The provided sources do not contain enough evidence.")
+    assert strip_stray_abstention(mixed) == ("DOACs need no routine monitoring [5]. "
+                                             "They cause less intracranial bleeding [3].")
+    pure = "The provided sources do not contain enough evidence."
+    assert strip_stray_abstention(pure) == pure
+    uncited = "Some general statement. The provided sources do not contain enough evidence."
+    assert strip_stray_abstention(uncited) == uncited     # no cited claim: keep the refusal

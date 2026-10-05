@@ -19,6 +19,7 @@ def _tokens(text: str) -> set[str]:
     return {w for w in _WORD.findall(text.lower()) if len(w) > 2}
 
 
+_MARKER = re.compile(r"\[\d+\]")
 _RANGE = re.compile(r"\[(\d+(?:\s*[-–,]\s*\d+)+)\]")
 _ABSTAIN = re.compile(r"(do(?:es)? not|don't) (?:contain|provide|include) (?:enough|sufficient|any)"
                       r"|not enough evidence|insufficient evidence", re.I)
@@ -44,6 +45,20 @@ def normalize_markers(text: str, n_sources: int | None = None) -> str:
 def is_abstention(sentence: str) -> bool:
     """'The sources do not contain enough evidence…' is not a factual claim."""
     return bool(_ABSTAIN.search(sentence))
+
+
+def strip_stray_abstention(text: str) -> str:
+    """Remove refusal sentences from an answer that also makes cited claims.
+
+    Live output sometimes gave a full cited answer and then appended "The provided
+    sources do not contain enough evidence." — contradicting itself. A refusal
+    is only kept when it IS the answer (no cited, non-refusal sentence exists).
+    """
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    substantive = [s for s in sentences if _MARKER.search(s) and not is_abstention(s)]
+    if not substantive:
+        return text
+    return " ".join(s for s in sentences if not is_abstention(s)).strip()
 
 
 def dedupe_passages(passages: list[RetrievedPassage]) -> list[RetrievedPassage]:

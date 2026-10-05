@@ -55,7 +55,7 @@ Scored with the harness in `src/assistant/eval/` (`scripts/rag_benchmark.py`):
 | Fine-tuned + RAG | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN | PENDING RUN |
 
 The harness is **validated end-to-end offline** (`python scripts/rag_benchmark.py
---sample`, plus 22 passing CI tests); the numbers above fill after a GPU run over
+--sample`, plus 29 passing CI tests); the numbers above fill after a GPU run over
 the curated corpus + eval set. `results/benchmark_explorer.json` then powers the
 live Explorer. (No fabricated numbers — same discipline as Part B.)
 
@@ -65,7 +65,7 @@ live Explorer. (No fabricated numbers — same discipline as Part B.)
 pip install -r requirements-assistant.txt        # RAG + agents + API
 python -m pytest tests/ -q                        # 12 CPU tests, no GPU
 python scripts/rag_benchmark.py --sample          # offline 4-way wiring check
-python scripts/rag_index.py --config configs/corpus.yaml   # build the real index
+python scripts/rag_index.py --rebuild    # build the real index (18.5K chunks; see deploy/DEPLOY.md)
 uvicorn src.assistant.api.app:app --reload        # backend (GET /health, POST /query)
 ```
 

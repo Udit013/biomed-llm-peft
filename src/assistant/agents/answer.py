@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 
-from ..rag.citations import normalize_markers
+from ..rag.citations import normalize_markers, strip_stray_abstention
 from ..serving.prompts import build_answer_messages
 from .state import AgentState, Deps
 
@@ -18,7 +18,8 @@ def answer(state: AgentState, deps: Deps) -> AgentState:
     gen_ms = round((time.perf_counter() - t0) * 1000, 2)
 
     return {
-        "answer": normalize_markers(result.text, len(passages)) if passages else result.text,
+        "answer": (strip_stray_abstention(normalize_markers(result.text, len(passages)))
+                   if passages else result.text),
         "latency_ms": {**state.get("latency_ms", {}), "generate_ms": gen_ms},
         "token_usage": {
             "prompt_tokens": result.prompt_tokens,

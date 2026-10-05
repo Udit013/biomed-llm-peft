@@ -172,3 +172,43 @@ def test_pgvector_reconnects_once_and_upserts_all_columns(monkeypatch):
                ordinal=0, url=None, metadata={})
     st.add([EmbeddedChunk(chunk=ch, embedding=[0.0] * 4)])
     assert "text = EXCLUDED.text" in executed[-1]
+
+
+def test_pgvector_rebuild_loads_staging_then_swaps_atomically(monkeypatch):
+    class OpErr(Exception):
+        pass
+    monkeypatch.setitem(sys.modules, "psycopg", types.SimpleNamespace(OperationalError=OpErr))
+    from src.assistant.rag import store as store_mod
+
+    log, commits = [], []
+
+    class Cur:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def execute(self, sql, params=None): log.append(" ".join(sql.split()))
+        def executemany(self, sql, rows): log.append(f"MANY {len(rows)}")
+
+    class Conn:
+        closed = False
+        def cursor(self): return Cur()
+        def commit(self): commits.append(len(log))
+        def rollback(self): pass
+    monkeypatch.setattr(store_mod.PgVectorStore, "_connect", lambda self: Conn())
+
+    from src.assistant.schema import Chunk, EmbeddedChunk
+    st = store_mod.PgVectorStore("dsn", 4)
+    log.clear(); commits.clear()
+    emb = [EmbeddedChunk(chunk=Chunk(chunk_id=f"c{i}", doc_id="d", source="pubmed",
+                                     title="t", text="x", ordinal=i), embedding=[0.0] * 4)
+           for i in range(5)]
+    st.rebuild(emb, batch=2)
+
+    joined = "\n".join(log)
+    assert "MANY 2" in joined and "MANY 1" in joined               # batched load
+    i_index = next(i for i, s in enumerate(log) if s.startswith("CREATE INDEX biomed_chunks_new_emb_idx"))
+    i_live = log.index("ALTER TABLE biomed_chunks RENAME TO biomed_chunks_prev")
+    i_new = log.index("ALTER TABLE biomed_chunks_new RENAME TO biomed_chunks")
+    assert max(i for i, s in enumerate(log) if s.startswith("MANY")) < i_index < i_live < i_new
+    # Index build and both renames commit together: no window with no live table.
+    swap_commit = next(c for c in commits if c > i_new)
+    assert not any(i_index <= c - 1 < i_new for c in commits if c != swap_commit)

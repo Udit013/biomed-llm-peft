@@ -83,6 +83,11 @@ class LocalVectorStore(VectorStore):
     def count(self) -> int:
         return len(self._chunks)
 
+    def rebuild(self, embedded: list[EmbeddedChunk]) -> None:
+        """Replace the whole index with `embedded`."""
+        self._vecs, self._chunks = None, []
+        self.add(embedded)
+
     # ---- persistence ----
     @property
     def _vec_path(self):  return self.dir / "vectors.npz"
@@ -163,10 +168,7 @@ class PgVectorStore(VectorStore):
         self._run(ddl)
 
     def add(self, embedded: list[EmbeddedChunk]) -> None:
-        rows = [(e.chunk.chunk_id, e.chunk.doc_id, e.chunk.source, e.chunk.title,
-                 e.chunk.text, e.chunk.ordinal, e.chunk.url,
-                 int(e.chunk.metadata.get("year", 0) or 0), json.dumps(e.chunk.metadata),
-                 np.asarray(e.embedding, dtype=np.float32)) for e in embedded]
+        rows = [self._row(e) for e in embedded]
         # Upsert EVERY column: refreshing only the embedding left stale text/title
         # paired with a new vector when a document was re-chunked.
         self._run(lambda cur: cur.executemany(
@@ -179,6 +181,52 @@ class PgVectorStore(VectorStore):
                   title = EXCLUDED.title, text = EXCLUDED.text,
                   ordinal = EXCLUDED.ordinal, url = EXCLUDED.url, year = EXCLUDED.year,
                   metadata = EXCLUDED.metadata, embedding = EXCLUDED.embedding""", rows))
+
+    def rebuild(self, embedded: list[EmbeddedChunk], batch: int = 1000) -> None:
+        """Replace the index with zero read downtime: staging table + atomic swap.
+
+        Load `{t}_new`, build its indexes, then rename in ONE transaction:
+        live -> `{t}_prev`, new -> live. Readers keep querying the old table until
+        the swap commits (the rename lock is held for milliseconds). `{t}_prev` is
+        kept for instant rollback (swap back) until the next rebuild.
+        """
+        t, new, prev = self.table, f"{self.table}_new", f"{self.table}_prev"
+
+        def stage(cur):
+            cur.execute(f"DROP TABLE IF EXISTS {new}")
+            cur.execute(f"""CREATE TABLE {new} (
+                chunk_id TEXT PRIMARY KEY, doc_id TEXT, source TEXT, title TEXT,
+                text TEXT, ordinal INT, url TEXT, year INT,
+                metadata JSONB, embedding vector({self.dim}))""")
+        self._run(stage)
+        sql = (f"INSERT INTO {new} (chunk_id, doc_id, source, title, text, ordinal, "
+               f"url, year, metadata, embedding) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)")
+        rows = [self._row(e) for e in embedded]
+        for i in range(0, len(rows), batch):       # one commit per batch: resumable, bounded
+            self._run(lambda cur, b=rows[i:i + batch]: cur.executemany(sql, b))
+
+        def index_and_swap(cur):
+            # Index AFTER loading: building HNSW once beats maintaining it per insert.
+            cur.execute(f"CREATE INDEX {new}_emb_idx ON {new} "
+                        f"USING hnsw (embedding vector_cosine_ops)")
+            cur.execute(f"CREATE INDEX {new}_source_idx ON {new} (source)")
+            cur.execute(f"CREATE INDEX {new}_year_idx ON {new} (year)")
+            cur.execute(f"DROP TABLE IF EXISTS {prev}")
+            cur.execute(f"ALTER TABLE {t} RENAME TO {prev}")
+            cur.execute(f"ALTER TABLE {new} RENAME TO {t}")
+            for suffix in ("emb_idx", "source_idx", "year_idx"):
+                cur.execute(f"ALTER INDEX IF EXISTS {t}_{suffix} RENAME TO {prev}_{suffix}")
+                cur.execute(f"ALTER INDEX {new}_{suffix} RENAME TO {t}_{suffix}")
+            cur.execute(f"ALTER TABLE {prev} RENAME CONSTRAINT {t}_pkey TO {prev}_pkey")
+            cur.execute(f"ALTER TABLE {t} RENAME CONSTRAINT {new}_pkey TO {t}_pkey")
+        self._run(index_and_swap)                  # _run commits once: atomic swap
+
+    @staticmethod
+    def _row(e: EmbeddedChunk) -> tuple:
+        c = e.chunk
+        return (c.chunk_id, c.doc_id, c.source, c.title, c.text, c.ordinal, c.url,
+                int(c.metadata.get("year", 0) or 0), json.dumps(c.metadata),
+                np.asarray(e.embedding, dtype=np.float32))
 
     def search(self, query_vec, k, metadata_filter=None) -> list[RetrievedPassage]:
         where, params = "", [np.asarray(query_vec, dtype=np.float32)]

@@ -36,17 +36,30 @@ def fetch_pubmed(query: str, retmax: int = 200, email: str | None = None,
     if api_key:
         common["api_key"] = api_key
 
-    with httpx.Client(timeout=30) as client:
-        r = client.get(f"{EUTILS}/esearch.fcgi",
-                       params={**common, "term": query, "retmax": retmax, "retmode": "json"})
+    def call(client, method, url, **kw):
+        for attempt in range(3):                  # NCBI 429s / 5xx are transient
+            r = client.request(method, url, **kw)
+            if r.status_code < 500 and r.status_code != 429:
+                r.raise_for_status()
+                return r
+            time.sleep(2 ** attempt)
         r.raise_for_status()
+        return r
+
+    with httpx.Client(timeout=60) as client:
+        # sort=relevance = PubMed "Best Match"; the API default is newest-first,
+        # which would fill the quota with whatever was published last week.
+        r = call(client, "GET", f"{EUTILS}/esearch.fcgi",
+                 params={**common, "term": query, "retmax": retmax, "retmode": "json",
+                         "sort": "relevance"})
         pmids = r.json().get("esearchresult", {}).get("idlist", [])
         if not pmids:
             return []
         time.sleep(0.34)  # be polite to NCBI (~3 req/s without key)
-        r = client.get(f"{EUTILS}/efetch.fcgi",
-                       params={**common, "id": ",".join(pmids), "retmode": "xml"})
-        r.raise_for_status()
+        # POST: hundreds of PMIDs overflow a GET URL.
+        r = call(client, "POST", f"{EUTILS}/efetch.fcgi",
+                 data={**common, "id": ",".join(pmids), "retmode": "xml"})
+    time.sleep(0.34)
     return _parse_pubmed_xml(r.text)
 
 

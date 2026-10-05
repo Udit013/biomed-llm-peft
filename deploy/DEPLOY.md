@@ -16,13 +16,28 @@ HF Space (Gradio)  --/query-->  Render (FastAPI)  --SQL-->  Neon (pgvector)
 1. Create a free project at https://neon.tech → copy the connection string (DSN).
 2. (Optional) apply `deploy/neon_schema.sql` — the app also creates it on first use.
 
-## 2. Build + push the index (from a machine with the embedding model)
+## 2. Build + push the index
+Embed with the SAME embedder production uses for queries (fastembed ONNX,
+`requirements-api.txt`). Its pins need Python 3.11/3.12 (the API image is 3.12).
+Put the DSN in a gitignored `.env` rather than your shell history.
 ```bash
-pip install -r requirements-assistant.txt
-export BIOMED_VECTOR_BACKEND=pgvector
-export BIOMED_DATABASE_URL="postgres://...neon..."
-export BIOMED_NCBI_EMAIL="you@example.com"       # polite NCBI header
-python scripts/rag_index.py --config configs/corpus.yaml
+python3.12 -m venv .venv-index && .venv-index/bin/pip install -r requirements-api.txt pyyaml
+echo 'BIOMED_DATABASE_URL=postgresql://...neon...' >> .env      # .env is gitignored
+export BIOMED_VECTOR_BACKEND=pgvector BIOMED_EMBEDDING_PROVIDER=fastembed BIOMED_USE_RERANKER=false
+.venv-index/bin/python scripts/rag_index.py --dry-run    # fetch + embed, write nothing
+.venv-index/bin/python scripts/rag_index.py --rebuild    # staging table + atomic swap
+```
+The Oct 2026 rebuild: 5,029 abstracts → 18,528 chunks, ~12 min to embed on an
+M3 Pro CPU, 103 MB in Neon. Live queries keep reading the old index until the
+final swap; the previous index stays as `biomed_chunks_prev`.
+
+**Rollback** (one transaction, in the Neon SQL editor):
+```sql
+BEGIN;
+ALTER TABLE biomed_chunks      RENAME TO biomed_chunks_bad;
+ALTER TABLE biomed_chunks_prev RENAME TO biomed_chunks;
+-- (optional) rename indexes back to biomed_chunks_* so a later rebuild finds them
+COMMIT;
 ```
 
 ## 3. Precompute the benchmark (on a GPU session)

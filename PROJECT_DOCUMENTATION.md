@@ -376,7 +376,7 @@ biomed-llm-peft/
 ├── notebooks/
 │   └── run_colab.ipynb           A ready-to-run Google Colab notebook (Part B)
 │
-├── tests/                      Automated tests (27 tests, all CPU-only)
+├── tests/                      Automated tests (29 tests, all CPU-only)
 │   ├── _fakes.py                  Fake embedder + fake LLM (no downloads needed)
 │   ├── test_rag.py                Tests for the RAG pipeline (Part A)
 │   ├── test_agents.py             Tests for the 4-agent workflow (Part A)
@@ -722,12 +722,26 @@ by `pipeline.py`.
 
 Two data sources, both producing the same `Document` shape:
 - **`fetch_pubmed(query, retmax, email, api_key)`** calls the NCBI **E-utilities**
-  API in two steps: `esearch` (turn a text query like `"sepsis early
-  management[Title/Abstract]"` into a list of PubMed IDs) then `efetch` (download
-  the full abstract XML for those IDs). The XML is parsed with Python's built-in
-  `xml.etree.ElementTree` to pull out the title, abstract text, year, and journal.
-  A `time.sleep(0.34)` between the two calls respects NCBI's ~3-requests/second
-  rate limit for anonymous callers.
+  API in two steps: `esearch` (turn a query like
+  `(sepsis[tiab] OR "septic shock"[tiab]) AND (diagnosis[tiab] OR …)` into a list
+  of PubMed IDs, ranked by `sort=relevance` — PubMed's "Best Match"; the API's
+  default is newest-first) then `efetch` (download the abstract XML for those IDs,
+  sent as a POST because hundreds of IDs overflow a GET URL). The XML is parsed
+  with Python's built-in `xml.etree.ElementTree` to pull out the title, abstract
+  text, year, and journal. `time.sleep(0.34)` between calls respects NCBI's
+  ~3-requests/second limit for anonymous callers, and 429/5xx responses are
+  retried with backoff.
+
+  **A query-syntax bug that shaped the whole demo.** The original queries were
+  written as `"hypertension treatment adults[Title/Abstract]"`. PubMed applies a
+  field tag to the *whole* quoted string, so that is an **exact-phrase** search:
+  it matched **1** abstract in all of PubMed (diabetes: **3**). Ten topics × a
+  400-result cap produced only 733 abstracts, mostly from the few phrases that
+  happened to be common — and the demo correctly refused to answer basic
+  hypertension or metformin questions because the index had nothing on them.
+  The queries are now field-scoped term logic (each term tagged `[tiab]`,
+  combined with AND/OR), so the same hypertension topic matches ~22,000 reviews
+  and guidelines.
 - **`load_guidelines(corpus_dir)`** reads plain `.txt` files placed under
   `data/corpus/guidelines/{nih,who,cdc}/` — a low-tech but honest way to include
   curated guideline text without needing to solve PDF parsing.
@@ -809,6 +823,11 @@ Three helpers in this file exist because of things seen in live output:
   sepsis) and was marked "supported". Such sentences are now excluded from
   `claims`; an answer that only abstains gets `all_claims_supported = None`
   (neither pass nor fail) instead of a misleading green check.
+- **`strip_stray_abstention()`** — the opposite failure: after the corpus grew,
+  the model sometimes gave a full cited answer and then appended "The provided
+  sources do not contain enough evidence," contradicting itself. The answer
+  agent removes refusal sentences when at least one cited, non-refusal sentence
+  exists; a refusal that *is* the whole answer is kept.
 
 **Reusing stored vectors.** Semantic verification compares each claim against
 each passage, which used to mean embedding all 5 passages again on every query —
@@ -1474,7 +1493,7 @@ CREATE INDEX biomed_chunks_emb_idx ON biomed_chunks USING hnsw (embedding vector
   table — see [§11](#11-authentication--what-exists-and-what-doesnt).
 - **HNSW index** for approximate nearest-neighbor search, chosen over the
   alternative `IVFFlat` index type because HNSW gives better query-time recall
-  at this dataset's scale (a few thousand chunks), at the cost of slower index
+  at this dataset's scale (~18.5K chunks), at the cost of slower index
   *building* — an acceptable trade since the index is rebuilt rarely, not on
   every request.
 - **CRUD, in practice:** *Create* — `PgVectorStore.add()` sends one batched
@@ -1519,6 +1538,7 @@ scripts/rag_index.py
   → chunk_document()                      (chunk.py)
   → embedder.embed_documents()             (embed.py, batch)
   → store.add([EmbeddedChunk, ...])        (store.py — INSERT/upsert)
+     or store.rebuild([...])                 (store.py — staging table + atomic swap)
 ```
 
 This is a **one-way, offline, batch pipeline**, run deliberately by a human
@@ -1681,9 +1701,12 @@ a hypothetical future.
   actually change (`data.train_size`, `output.output_dir`), via a recursive
   dict merge (`_deep_merge()`). This avoids duplicating 40 lines of shared
   hyperparameters across 5 nearly-identical files.
-- **`configs/corpus.yaml`** — the reproducible list of PubMed searches (10
-  clinical topics) that build Part A's real corpus — anyone can re-run
-  `scripts/rag_index.py --config configs/corpus.yaml` and get the same corpus.
+- **`configs/corpus.yaml`** — the reproducible list of PubMed searches (18
+  clinical topics, 300 Best-Match results each) plus a shared `query_filter`
+  appended to every query: has an abstract, English, review or guideline
+  publication type, published 2010–2026. Re-running
+  `scripts/rag_index.py --config configs/corpus.yaml` rebuilds the corpus; it is
+  reproducible in method, though PubMed's ranking drifts as papers are added.
 - **`lm_eval_tasks/*.yaml` + `utils.py`** — custom task definitions telling
   `lm-evaluation-harness` how to format a MedMCQA/PubMedQA question and how to
   score it (`output_type: multiple_choice` — meaning the harness scores the
@@ -1696,7 +1719,7 @@ a hypothetical future.
   request, installs a lean, CPU-only dependency set (no PyTorch), runs Part B's
   structural smoke test (`scripts/smoke_test.py` — checks imports, config
   loading, and command-building without ever touching a GPU or downloading a
-  model), then runs Part A's 27-test `pytest` suite. This CI setup is a real
+  model), then runs Part A's 29-test `pytest` suite. This CI setup is a real
   engineering signal: it proves the whole system's *wiring* is correct on every
   single commit, with zero cost and zero GPU dependency.
 - **`.env.example`** — a template showing which environment variables *can* be
@@ -1885,7 +1908,7 @@ Browser: re-renders the answer panel + evidence panel with the real result
 ### 16.2 Building the search index (offline, run by a human)
 
 ```text
-Human runs: python scripts/rag_index.py --config configs/corpus.yaml
+Human runs: python scripts/rag_index.py --config configs/corpus.yaml [--rebuild | --dry-run]
    │
    ▼
 get_settings() loads config (BIOMED_VECTOR_BACKEND, BIOMED_DATABASE_URL, ...)
@@ -1897,25 +1920,47 @@ RAGPipeline() constructed — chooses embedder + store backend from config
 load_guidelines(corpus_dir)  — reads any local NIH/WHO/CDC .txt files
    │
    ▼
-for each PubMed query in corpus.yaml:
-     fetch_pubmed(query) → NCBI esearch (get PMIDs) → NCBI efetch (get abstracts)
-                          → parsed into Document objects
+for each of the 18 queries in corpus.yaml:
+     fetch_pubmed("(" + query + ")" + query_filter, retmax=300)
+        → esearch (Best Match PMIDs) → efetch POST (abstracts) → Documents
    │
    ▼
-de-duplicate all Documents by doc_id (queries can overlap)
+de-duplicate: by doc_id (topics overlap), then by abstract text
+              (PubMed republishes some abstracts under several PMIDs)
    │
-   ▼
-pipeline.build_index(documents):
-     for each Document:
-         chunk_document() → list[Chunk]
-         embedder.embed_documents([chunk texts])  → vectors (batched)
-         store.add([EmbeddedChunk, ...])            → INSERT/upsert into Postgres
+   ├── default (upsert): build_index() — chunk → embed → store.add() per document
    │
-   ▼
-Prints: "indexed 733 documents -> 3410 chunks (3410 total in pgvector store)"
+   └── --rebuild / --dry-run: embed_corpus() — chunk + embed EVERYTHING in memory,
+          writing nothing (--dry-run stops here and prints counts)
+          │
+          ▼
+       store.rebuild(embedded):
+          CREATE TABLE biomed_chunks_new                 (live table untouched)
+          INSERT … in batches of 1,000, one commit each
+          ── one transaction ──────────────────────────────────────────────
+          CREATE INDEX (hnsw, source, year) ON biomed_chunks_new
+          DROP TABLE IF EXISTS biomed_chunks_prev
+          ALTER TABLE biomed_chunks     RENAME TO biomed_chunks_prev
+          ALTER TABLE biomed_chunks_new RENAME TO biomed_chunks   (+ index/pkey renames)
+          COMMIT
 ```
-(These exact numbers — 733 documents, 3,410 chunks — are the real, measured
-result of running this script against the current `configs/corpus.yaml`.)
+
+**Why a staging table instead of `TRUNCATE` + reload?** Embedding 18,528
+chunks takes ~12 minutes on a laptop CPU and uploading takes more; emptying the
+live table first would have left the public demo answering from an empty or
+half-loaded index for that whole time. With the swap, live queries read the old
+table until the final `COMMIT`, and the rename holds its lock for milliseconds.
+The HNSW index is built once after loading, which is much faster than
+maintaining it across thousands of inserts.
+
+**Rollback.** The previous index survives as `biomed_chunks_prev` until the next
+rebuild. Reverting is one transaction: rename `biomed_chunks` → `_new` and
+`biomed_chunks_prev` → `biomed_chunks` (plus their indexes). Neon's 6-hour
+history window is a second, coarser safety net.
+
+**Measured result (Oct 2026, this config):** 5,070 unique PMIDs → 41 duplicate
+abstracts dropped → **5,029 documents → 18,528 chunks**. The previous,
+exact-phrase config produced 733 documents → 3,410 chunks.
 
 ### 16.3 Running the 4-way evaluation benchmark
 
@@ -1992,7 +2037,7 @@ interviewer is most likely to ask, answered with the actual reasoning.
 
 ### Why pgvector on Postgres instead of a dedicated vector database (Pinecone, Weaviate, etc.)?
 
-At this corpus size (3,410 chunks), a dedicated vector database's main
+At this corpus size (18,528 chunks, 103 MB in Neon), a dedicated vector database's main
 advantages — massive horizontal scale, specialized indexing at millions of
 vectors — don't apply. Using pgvector means **one datastore** to operate
 (no separate service, no separate bill, no separate credentials), plain SQL for
@@ -2087,7 +2132,7 @@ to fully exercise the agent logic.
 
 ## 18. Testing Strategy
 
-**27 tests total, 100% CPU-only, zero network calls, zero model downloads** —
+**29 tests total, 100% CPU-only, zero network calls, zero model downloads** —
 verified to run in well under a second.
 
 - **`tests/_fakes.py`** — the shared testing infrastructure. `FakeEmbedder`
@@ -2110,7 +2155,7 @@ verified to run in well under a second.
   hand-constructed passage lists with known correct answers, generation metrics
   (citation coverage, groundedness) against hand-written strings, and a full
   4-way benchmark run end-to-end against the offline sample corpus.
-- **`tests/test_api.py`** (9 tests) — the production-hardening paths, each
+- **`tests/test_api.py`** (10 tests) — the production-hardening paths, each
   tied to a real failure: provider failover (first provider raises, second
   answers) and `UpstreamError` when all fail; the sliding-window rate limiter
   (per-client, window slides, `0` disables) and the 429 + `Retry-After`
@@ -2118,9 +2163,11 @@ verified to run in well under a second.
   `postgresql://user:pw@…` string; a model outage that does *not* discard the
   service; 8 threads cold-starting at once with the builder running exactly
   once; and the pgvector store reusing one connection, reconnecting once after
-  a dropped connection, and upserting every column. The store test injects a
+  a dropped connection, and upserting every column; and `rebuild()` loading a
+  staging table in batches, then building indexes and swapping names in one
+  commit. The store tests inject a
   fake `psycopg` module, so it needs no database.
-- **`tests/test_citations.py`** (5 tests) — answer-quality fixes from live
+- **`tests/test_citations.py`** (6 tests) — answer-quality fixes from live
   output: `[1-3]` / `[1, 3]` normalization (clamped to the source count, plain
   "1-3 mg" untouched); abstention sentences excluded from claims; duplicate
   abstracts collapsed with ranks renumbered; semantic verification embedding
@@ -2237,7 +2284,7 @@ so the tests exercise real data-flow logic, not just "was this method called."
    exactly which sentence maps to which similarity score.
 
 10. **Separately, a researcher** (not this visitor) had earlier run
-    `python scripts/rag_index.py --config configs/corpus.yaml` to build the 3,410-chunk
+    `python scripts/rag_index.py --config configs/corpus.yaml --rebuild` to build the 18,528-chunk
     Neon index this query just searched, and — on a GPU session — had run
     `python scripts/train.py --config configs/qlora_5k.yaml` to produce the
     fine-tuned adapter published at
