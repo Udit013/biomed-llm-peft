@@ -73,19 +73,26 @@ Deploy to free tier (Neon + Render + HF Spaces): [deploy/DEPLOY.md](deploy/DEPLO
 
 ## API
 
-- `GET /health` — liveness + config (vector backend, provider, model-loaded).
+- `GET /health` — liveness + config (vector backend, provider, model-loaded) and
+  `last_query`, the outcome of the most recent real query.
 - `POST /query` `{"question": "..."}` → `GroundedAnswer` (answer, citations,
   passages, per-claim verification, latency, tokens). Returns `config` =
   `base_rag` or `ft_rag` — whatever the backend actually serves — so the UI
   labels it honestly and a GPU-endpoint swap needs no API/UI change.
 - `GET /benchmark` — precomputed 4-way Benchmark Explorer data.
 
+Errors: `429` (per-client rate limit, with `Retry-After`), `503` (service can't
+start), `502` (every LLM provider failed, or a pipeline error). Error bodies carry
+a request ID, never raw exception text.
+
 ## Engineering
 
 Modular `src/assistant/` (config · logging · schema · rag · agents · serving ·
 eval · api); pinned deps; **GitHub Actions CI** (`.github/workflows/ci.yml`) runs
 the research smoke test + RAG/agent/eval tests on every push; structured JSON
-logging with per-stage latency; a backend-agnostic vector store (local numpy /
+logging with per-stage latency (retrieve / generate / verify); HF Inference
+provider failover (`BIOMED_HF_PROVIDERS`), a per-client rate limit, and a reused,
+self-reconnecting Neon connection; a backend-agnostic vector store (local numpy /
 Neon pgvector) and framework-agnostic agents (LangGraph / sequential fallback) so
 dev + CI need no external services; Dockerized backend + one-command reproduction.
 

@@ -40,9 +40,11 @@ Two clearly-separated layers in one repo:
 2. **Index** (`rag/{chunk,embed,store}.py`) — sentence-aware chunks → bge-small
    embeddings → pgvector (prod) or local numpy (dev/CI).
 3. **Serve a query** — the LangGraph agents run Planner (strategy + metadata
-   filter) → Retrieval (semantic + rerank) → Answer (grounded, cited generation)
-   → Citation-Verification (per-claim semantic grounding, cosine of each claim vs
-   the evidence; configurable), returning a typed
+   filter) → Retrieval (semantic search, duplicate-abstract removal, optional
+   rerank) → Answer (grounded, cited generation; `[1-3]`-style ranges normalized
+   to `[1][2][3]`) → Citation-Verification (per-claim semantic grounding: cosine
+   of each claim vs the passages' stored vectors; "not enough evidence" sentences
+   aren't scored as claims), returning a typed
    `GroundedAnswer` with citations, evidence, verification, latency, and tokens.
 
 ### Evaluation (`src/assistant/eval/`)
@@ -65,3 +67,8 @@ README tables and the interactive Benchmark Explorer.
   `/query`) and the UI displays that verbatim — so pointing
   `BIOMED_INFERENCE_PROVIDER` at a GPU backend with the adapter upgrades the live
   demo to **Fine-tuned + RAG** with zero UI or API changes.
+- **Resilient hosted inference** — HF's `auto` routing once kept sending the model
+  to a provider that had dropped it (every query failed; `/health` stayed green).
+  The backend now tries an ordered provider list (`featherless-ai`, then `auto`),
+  `/health` reports the last real query outcome, and errors return a request ID
+  instead of raw upstream/database messages.

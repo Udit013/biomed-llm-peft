@@ -14,7 +14,7 @@ from ..config import Settings, get_settings
 from ..logging import get_logger, timed
 from ..schema import Citation, Document, EmbeddedChunk, RetrievedPassage
 from .chunk import chunk_document
-from .citations import build_citations
+from .citations import build_citations, dedupe_passages
 from .embed import Embedder, get_embedder
 from .rerank import Reranker
 from .retrieve import Retriever
@@ -62,6 +62,7 @@ class RAGPipeline:
             passages = self.retriever.retrieve(
                 query, k=self.cfg.retrieve_top_k, metadata_filter=metadata_filter)
         latencies["retrieve_ms"] = t.ms
+        passages = dedupe_passages(passages)
 
         if self.reranker and passages:
             with timed(log, "rerank", n=len(passages)) as t:

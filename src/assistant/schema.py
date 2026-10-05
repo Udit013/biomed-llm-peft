@@ -46,6 +46,9 @@ class RetrievedPassage(BaseModel):
     score: float                     # similarity from the vector store
     rerank_score: float | None = None
     rank: int | None = None
+    # Stored vector, reused by semantic verification so passages aren't re-embedded
+    # on every query. Internal only: excluded from API responses.
+    embedding: list[float] | None = Field(default=None, exclude=True, repr=False)
 
 
 class Citation(BaseModel):

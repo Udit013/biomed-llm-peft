@@ -74,7 +74,8 @@ class LocalVectorStore(VectorStore):
             c = self._chunks[int(idx)]
             if not _passes_filter(c.metadata, c.source, metadata_filter):
                 continue
-            out.append(RetrievedPassage(chunk=c, score=float(sims[idx]), rank=len(out) + 1))
+            out.append(RetrievedPassage(chunk=c, score=float(sims[idx]), rank=len(out) + 1,
+                                        embedding=self._vecs[int(idx)].tolist()))
             if len(out) >= k:
                 break
         return out
@@ -193,7 +194,7 @@ class PgVectorStore(VectorStore):
         def q(cur):
             cur.execute(
                 f"""SELECT chunk_id, doc_id, source, title, text, ordinal, url, metadata,
-                           1 - (embedding <=> %s) AS score
+                           1 - (embedding <=> %s) AS score, embedding
                     FROM {self.table} {where}
                     ORDER BY embedding <=> %s LIMIT %s""",
                 [params[0], *params[1:-1], params[0], params[-1]])
@@ -203,7 +204,8 @@ class PgVectorStore(VectorStore):
         for i, r in enumerate(rows):
             chunk = Chunk(chunk_id=r[0], doc_id=r[1], source=r[2], title=r[3], text=r[4],
                           ordinal=r[5], url=r[6], metadata=r[7] or {})
-            out.append(RetrievedPassage(chunk=chunk, score=float(r[8]), rank=i + 1))
+            out.append(RetrievedPassage(chunk=chunk, score=float(r[8]), rank=i + 1,
+                                        embedding=[float(x) for x in r[9]]))
         return out
 
     def count(self) -> int:

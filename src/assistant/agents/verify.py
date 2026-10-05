@@ -7,6 +7,8 @@ configs there is no evidence to verify against, so verification is skipped.
 """
 from __future__ import annotations
 
+import time
+
 from ..rag.citations import verify_claims, verify_claims_semantic
 from .state import AgentState, Deps
 
@@ -18,6 +20,7 @@ def verify(state: AgentState, deps: Deps) -> AgentState:
         return {"claims": [], "all_supported": None}
 
     cfg = deps.pipeline.cfg
+    t0 = time.perf_counter()
     if getattr(cfg, "grounding_method", "semantic") == "semantic":
         claims, all_ok = verify_claims_semantic(
             answer_text, passages, deps.pipeline.embedder,
@@ -35,4 +38,8 @@ def verify(state: AgentState, deps: Deps) -> AgentState:
                    default=0.0)
         cit.support_score = best
 
-    return {"claims": claims, "all_supported": all_ok, "citations": citations}
+    latency = {**state.get("latency_ms", {}),
+               "verify_ms": round((time.perf_counter() - t0) * 1000, 2)}
+    # An answer that only abstains has no claims to verify: neither pass nor fail.
+    return {"claims": claims, "all_supported": all_ok if claims else None,
+            "citations": citations, "latency_ms": latency}
